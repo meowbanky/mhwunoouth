@@ -1,0 +1,11 @@
+
+.env
+.DS_Store
+.vscode/
+node_modules/
+vendor/
+*.log
+backup.bat
+tobedeleted/
+image_upload/
+upload.xlsx
