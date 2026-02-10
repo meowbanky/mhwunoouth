@@ -29,7 +29,7 @@ class NotificationService {
                 SUM(tlb_mastertransaction.loanRepayment) as loanRepayment,
                 (
                     SELECT 
-                        (SUM(m2.loanAmount) + SUM(m2.interest))- SUM(m2.loanRepayment)
+                        (SUM(m2.loanAmount) + SUM(m2.interest))- SUM(m2.loanRepayment)- SUM(m2.repayment_bank)
                     FROM tlb_mastertransaction m2
                     WHERE m2.memberid = tlb_mastertransaction.memberid
                     AND m2.periodid <= tlb_mastertransaction.periodid
@@ -42,7 +42,7 @@ class NotificationService {
                     AND m2.periodid <= tlb_mastertransaction.periodid
                 ) as welfareContribution,
                 SUM(tlb_mastertransaction.Contribution + 
-                    tlb_mastertransaction.loanRepayment ) as total
+                    tlb_mastertransaction.loanRepayment + tlb_mastertransaction.repayment_bank) as total
             FROM tlb_mastertransaction 
             INNER JOIN tbl_personalinfo ON tlb_mastertransaction.memberid = tbl_personalinfo.patientId
             LEFT JOIN tbpayrollperiods ON tlb_mastertransaction.periodid = tbpayrollperiods.Periodid              

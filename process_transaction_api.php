@@ -82,6 +82,7 @@ try {
             // 3. Calculate Current Balances
             // Logic ported from process.php: $balancesSQL
             // Note: PHP 8 string quoting for SQL
+
             $balSql = "SELECT 
                         IFNULL((SUM(loanAmount) + SUM(interest)), 0) 
                         - (SUM(loanRepayment) + SUM(repayment_bank)) AS Loanbalance

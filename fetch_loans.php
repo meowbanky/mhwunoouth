@@ -2,7 +2,12 @@
 session_start();
 require_once('Connections/hms.php');
 
-$col_Batch = isset($_SESSION['period']) ? $_SESSION['period'] : "-1";
+// Prioritize GET/POST period, then Session, then -1
+if (isset($_REQUEST['period']) && !empty($_REQUEST['period'])) {
+    $col_Batch = $_REQUEST['period'];
+} else {
+    $col_Batch = isset($_SESSION['period']) ? $_SESSION['period'] : "-1";
+}
 
 try {
     $query_Batch = "SELECT CONCAT(tbl_personalinfo.Lname,' , ',tbl_personalinfo.Fname,' ',(ifnull(tbl_personalinfo.Mname,' '))) AS `name`, 

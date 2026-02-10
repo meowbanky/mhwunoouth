@@ -14,8 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     
     $coopId = isset($_POST['coopid']) ? trim($_POST['coopid']) : '';
     $amount = isset($_POST['amount']) ? str_replace(',', '', $_POST['amount']) : 0;
-    // Fallback logic for period
-    $period = isset($_SESSION['period']) ? $_SESSION['period'] : 0;
+    // Prioritize POST period, then Session, then 0
+    $period = isset($_POST['period']) ? $_POST['period'] : (isset($_SESSION['period']) ? $_SESSION['period'] : 0);
     
     // Server-Side Interest Calculation
     try {
@@ -322,9 +322,27 @@ try {
     }
 
 
+    // Set Period Logic
+    function setPeriod(periodId) {
+        if (periodId) {
+            loadLoanTable(periodId);
+        }
+    }
+
     // Load Loan Table
-    function loadLoanTable() {
-        $.getJSON("fetch_loans.php", function(data) {
+    function loadLoanTable(periodId = null) {
+        // If no period passed, try to get from dropdown
+        if (!periodId) {
+            periodId = $('#PeriodId').val();
+        }
+        
+        // If still empty, maybe default or nothing
+        var url = "fetch_loans.php";
+        if (periodId) {
+            url += "?period=" + periodId;
+        }
+
+        $.getJSON(url, function(data) {
             $('#loanTableBody').html(data.body);
             $('#loanTableFoot').html(data.footer);
         });
@@ -356,12 +374,6 @@ try {
     }
     
     // Set Period Logic
-    function setPeriod(val) {
-        // Set variable and then reload table
-        $.get("setvariablechat.php?period="+val, function(){
-             loadLoanTable();
-        });
-    }
 
     // Calculate Interest
     function calculateInterest() {
@@ -381,6 +393,7 @@ try {
             var coopid = $('#txtCoopid').val();
             var amount = $('#txtAmount').val();
             var interest = $('#txtInterest').val();
+            var period = $('#PeriodId').val();
 
             if(coopid == '' || amount == '') {
                 Swal.fire({
@@ -390,12 +403,22 @@ try {
                 });
                 return;
             }
+            
+            if(period == '') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Period',
+                    text: 'Please select a repayment period.'
+                });
+                return;
+            }
 
             $.post("addloan.php", {
                 action: 'add_loan',
                 coopid: coopid,
                 amount: amount,
-                interest: interest
+                interest: interest,
+                period: period
             }, function(response) {
                 if(response.status === 'success') {
                     Swal.fire({
