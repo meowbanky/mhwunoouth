@@ -16,6 +16,18 @@ try {
             $response['status'] = 'success';
             $response['data'] = $periods;
         }
+        
+        // 1b. Fetch All Active Members (For selection dropdown)
+        elseif ($action === 'fetch_all_members') {
+            $query = "SELECT patientid, CONCAT(Lname, ' ', Fname, ' ', IFNULL(Mname, '')) as fullname 
+                      FROM tbl_personalinfo 
+                      WHERE Status = 'Active' 
+                      ORDER BY Lname ASC";
+            $stmt = $conn->query($query);
+            $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $response['status'] = 'success';
+            $response['data'] = $members;
+        }
 
         // 2. Fetch Deductions (Active/Current Status)
         elseif ($action === 'fetch_deductions') {

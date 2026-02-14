@@ -1,7 +1,7 @@
 <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 hidden lg:flex flex-col">
     <div class="p-6 flex items-center space-x-3">
-        <div class="bg-primary p-2 rounded-lg">
-            <span class="material-icons-round text-white text-2xl">health_and_safety</span>
+        <div class="bg-white p-1 rounded-lg">
+            <img src="image/mhwun_logo.png" alt="MHWUN Logo" class="w-10 h-10 object-contain">
         </div>
         <div>
             <h1 class="font-bold text-lg leading-tight">MHWUN</h1>
@@ -80,6 +80,10 @@
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bulksms.php', basename($currentPage)); ?>" href="bulksms.php">
             <span class="material-icons-round">sms</span>
             <span>SMS Center</span>
+        </a>
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('dnd_status_checker.php', basename($currentPage)); ?>" href="dnd_status_checker.php">
+            <span class="material-icons-round">do_not_disturb_on</span>
+            <span>DND Checker</span>
         </a>
         <div class="pt-10 pb-4 text-xs font-semibold text-slate-400 px-4 uppercase tracking-wider">System</div>
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('transact_period.php', $currentPage); ?>" href="transact_period.php">

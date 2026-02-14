@@ -73,7 +73,7 @@ if (!isset($_SESSION)) {
             </div>
             <div class="absolute top-8 left-8 flex items-center gap-3">
                 <div class="bg-white rounded-full p-2 shadow-lg">
-                    <img alt="MHWUN Logo Small" class="w-8 h-8 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOvPPaWomC5Dg1J5KVD0J4wafOZPvouO9lyVAZ5PIPIhMf8tGF0HMqoN4hxjRnhsb_L1UnZ7zJOWpcUpdtJIfQDQgvhSvp3LxSr71NKnawRHho53jjXkuxTjxa68NPagS4hGktYIiFnh-EEX8hs9T5KXROwujGhWHFKmhfnOymvrYbayOJFDJF5H45ha4meNYsqpc7-NqEirINkrNzERqBF_FFOJUfCBdkPSlL1A7d9fsPX1qOjOEY6ZlNVDoArJzeQ9oOd8Jz7JBF"/>
+                    <img alt="MHWUN Logo Small" class="w-8 h-8 rounded-full" src="image/mhwun_logo.png"/>
                 </div>
                 <span class="text-white font-bold tracking-wider text-xl">MHWUN</span>
             </div>

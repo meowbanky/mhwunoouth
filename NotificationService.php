@@ -25,7 +25,7 @@ class NotificationService {
                 tbl_personalinfo.MobilePhone,
 								concat(LEFT(tbpayrollperiods.PhysicalMonth, 3),' -',tbpayrollperiods.PhysicalYear) as PayrollPeriod,
                 SUM(tlb_mastertransaction.Contribution) as Contribution,
-                SUM(tlb_mastertransaction.loanAmount) as loanAmount,
+                (SUM(tlb_mastertransaction.loanAmount)+SUM(tlb_mastertransaction.interest)) as loanAmount,
                 SUM(tlb_mastertransaction.loanRepayment) as loanRepayment,
                 (
                     SELECT 
@@ -62,7 +62,7 @@ class NotificationService {
 
     private function logNotification($memberId, $message,$title = 'Transaction Alert') {
         $query = "INSERT INTO notifications 
-                  (memberid, message, created_at, status, title) 
+                  (staff_id, message, created_at, status, title) 
                   VALUES 
                   (:memberId, :message, NOW(), 'unread', :title)";
 
@@ -113,7 +113,7 @@ class NotificationService {
             "WELFARE BALANCE: %s\n" .
             "LOAN : %s\n" .
             "LOAN BALANCE: %s\n" .
-            "AS AT: %s ENDING\n",
+            "AS AT: %s\n",
             number_format(floatval($data['total']), 2, '.', ','),
             number_format(floatval($data['Contribution']), 2, '.', ','),
             number_format(floatval($data['welfareContribution']), 2, '.', ','),
@@ -129,6 +129,10 @@ class NotificationService {
         }
 
         $phone = $this->formatPhoneNumber($phone);
+
+        if (empty($phone) || strlen($phone) < 10) {
+            throw new \Exception("Invalid phone number: '$phone'. Must be at least 7 digits.");
+        }
 
         $data = [
             "api_key" => $this->smsConfig['apiKey'],
@@ -152,7 +156,19 @@ class NotificationService {
         }
 
         // Re-index array to be safe JSON
-        $formattedNumbers = array_values(array_map([$this, 'formatPhoneNumber'], $phoneNumbers));
+        $formattedNumbers = [];
+        foreach ($phoneNumbers as $p) {
+            $formatted = $this->formatPhoneNumber($p);
+            if (!empty($formatted) && strlen($formatted) >= 7) {
+                $formattedNumbers[] = $formatted;
+            }
+        }
+        $formattedNumbers = array_values($formattedNumbers);
+
+        if (empty($formattedNumbers)) {
+             // If all invalid, just return success or throw? Throw is safer.
+             throw new \Exception("No valid phone numbers found to send to.");
+        }
 
         $data = [
             "api_key" => $this->smsConfig['apiKey'],
@@ -170,29 +186,111 @@ class NotificationService {
         return $this->executeCurlRequest($url, $data);
     }
 
-    private function executeCurlRequest($url, $data) {
+    public function checkDNDStatus($phone) {
+        if (empty($phone)) {
+            throw new \Exception("Phone number is required");
+        }
+
+        $phone = $this->formatPhoneNumber($phone);
+
+        if (empty($phone) || strlen($phone) < 10) {
+            throw new \Exception("Invalid phone number: '$phone'. Must be at least 10 digits.");
+        }
+
+        $data = [
+            "api_key" => $this->smsConfig['apiKey'],
+            "phone_number" => $phone
+        ];
+
+        // The user wants https://api.termii.com/api/check/dnd
+        // Sticking to standard api.termii.com as per user hint and potential v3 issue for this endpoint
+        $url = "https://v3.api.termii.com/api/check/dnd";
+
+        // User example explicitly used GET with JSON body.
+        $response = $this->executeCurlRequest($url, $data, 'GET', false); // false = don't throw on error
+
+        // Handle specific "Not on DND" 404 response which is actually success + data
+        if (isset($response['message']) && (strpos($response['message'], 'not on DND') !== false || strpos($response['message'], 'not in our Database') !== false)) {
+             // Ensure dnd_active is false if missing
+             if (!isset($response['dnd_active'])) {
+                 $response['dnd_active'] = false;
+             }
+             // Ensure status is friendly
+             $response['status'] = 'DND not active';
+             return $response;
+        }
+
+        // Check if it was a real error that wasn't the "special" 404
+        if (isset($response['code']) && $response['code'] >= 400) {
+             throw new \Exception("SMS API Error ({$response['code']}): " . ($response['message'] ?? 'Unknown Error'));
+        }
+        
+        // If curl error or other issues logged in executeCurlRequest but allowed to pass
+        // pass through
+        return $response;
+    }
+
+    private function executeCurlRequest($url, $data, $method = 'POST', $throwOnError = true) {
         $ch = curl_init();
         
         // Debug Log Payload
-        error_log("Termii Request Payload: " . json_encode($data));
+        // error_log("Termii Request Payload ($method): " . json_encode($data));
 
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
+        $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => "",
             CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30, // Increased timeout for network latency
+            CURLOPT_TIMEOUT => 30,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => "POST",
-            CURLOPT_POSTFIELDS => json_encode($data),
-            CURLOPT_HTTPHEADER => [
-                "Content-Type: application/json"
-            ]
-        ]);
+        ];
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        // Headers
+        $headers = [
+            "Accept: application/json"
+        ];
+
+        if (strtoupper($method) === 'GET') {
+            // For GET, append data to URL as query string
+            if (!empty($data)) {
+                $url .= '?' . http_build_query($data);
+            }
+            $options[CURLOPT_HTTPGET] = true;
+        } else {
+            // For POST/other, use body
+            $options[CURLOPT_CUSTOMREQUEST] = $method;
+            $options[CURLOPT_POSTFIELDS] = json_encode($data);
+            $headers[] = "Content-Type: application/json";
+        }
+
+        $options[CURLOPT_HTTPHEADER] = $headers;
+        $options[CURLOPT_URL] = $url;
+        
+        // Debug Log URL
+        // error_log("Termii Request URL: " . $url);
+        
+        $response = false;
+        $attempt = 0;
+        $maxAttempts = (strtoupper($method) === 'GET') ? 3 : 1; // Retry only safe methods
+
+        do {
+            $attempt++;
+            curl_setopt_array($ch, $options);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            
+            if ($response !== false && $httpCode < 500) {
+                break; // Success or client error (not server fault)
+            }
+            
+            if ($attempt < $maxAttempts) {
+                error_log("Termii Request Failed (Attempt $attempt/$maxAttempts). Retrying...");
+                sleep(1); // Wait a second before retry
+            }
+        } while ($attempt < $maxAttempts);
+
+        // Debug Log Response
+        // error_log("Termii Response ($httpCode): " . substr($response, 0, 500));
 
         if (curl_errno($ch)) {
             $error = curl_error($ch);
@@ -205,16 +303,23 @@ class NotificationService {
         $responseData = json_decode($response, true);
 
         // Termii can return various codes, strictly check for success indicators
-        if ($httpCode !== 200 && $httpCode !== 201) {
-             // Debug log
-             error_log("Termii API Error: URL: $url - Code: $httpCode - Response: $response");
-             $errorMessage = isset($responseData['message']) ? $responseData['message'] : $response;
-             // Include URL in error message for better debugging
-             throw new \Exception("SMS API Error ($httpCode): $errorMessage (URL: $url)");
+        if ($httpCode >= 400) {
+              // Debug log always
+              error_log("Termii API Error: URL: $url - Code: $httpCode - Response: $response");
+              
+              if ($throwOnError) {
+                  $errorMessage = isset($responseData['message']) ? $responseData['message'] : $response;
+                  // Include URL in error message for better debugging
+                  throw new \Exception("SMS API Error ($httpCode): $errorMessage (URL: $url)");
+              }
+              // If not throwing, ensure code is in response data
+              if (is_array($responseData)) {
+                  $responseData['code'] = $httpCode; 
+              }
         }
 
         // Return formatted numbers for debugging
-        $responseData['debug_numbers'] = $data['to'] ?? []; 
+        $responseData['debug_numbers'] = $data['to'] ?? ($data['phone_number'] ? [$data['phone_number']] : []); 
 
         return $responseData;
     }

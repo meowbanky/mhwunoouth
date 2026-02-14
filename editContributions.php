@@ -190,7 +190,7 @@ function format_money($amount) {
     </div>
 </main>
 
-<script src="jquery-1.8.0.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
 <script>
     // Global State
     let currentPage = 1;

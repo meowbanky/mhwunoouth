@@ -172,12 +172,7 @@ try {
                         }
                     } catch (Exception $e) {
                          error_log("Transaction Notification Balance Check Failed: " . $e->getMessage());
-                         // Attempt to send anyway? No, safer to fail open if balance check fails? 
-                         // Or fail closed. Let's fail safe and not send if we can't verify balance, 
-                         // OR just log the error and try to send (Termii will fail if no balance).
-                         // Termii API will return error if no balance, so we can actually just let it try
-                         // but explicitly checking saves an API call.
-                         // Let's assume on error we skip to be safe.
+
                     }
                 }
                 

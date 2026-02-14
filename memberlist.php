@@ -194,7 +194,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'autocomplete') {
 
     </div>
 </main>
-<script src="jquery-1.8.0.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
 <script>
 function exportToExcel() {
     // Clone the current URL search params

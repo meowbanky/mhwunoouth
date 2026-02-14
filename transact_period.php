@@ -5,6 +5,7 @@ if (!isset($_SESSION['UserID'])) {
     header("Location: index.php");
     exit();
 }
+require_once('Connections/hms.php');
 ?>
 <?php include 'includes/header.php'; ?>
 <?php include 'includes/sidebar.php'; ?>

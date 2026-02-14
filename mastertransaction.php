@@ -218,6 +218,13 @@ include 'includes/sidebar.php';
             return true;
         }
 
+        function clearSearch() {
+            $('#member_name').val('').focus();
+            $('#staff_id').val('');
+            $('#clearBtn').addClass('hidden');
+            $('#suggestions').hide();
+        }
+
         // Auto Logout replaced with modern redirection if needed, otherwise removed as "unused"
         // If critical for security, standard practice is server-side session expiry + client redirect.
         // I will trust the PHP session check at the top of the file.

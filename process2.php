@@ -4,6 +4,7 @@ if (!isset($_SESSION['UserID'])) {
     header("Location: index.php");
     exit();
 }
+require_once('Connections/hms.php');
 ?>
 <?php include 'includes/header.php'; ?>
 <?php include 'includes/sidebar.php'; ?>
@@ -28,14 +29,55 @@ if (!isset($_SESSION['UserID'])) {
             </h3>
             <div class="flex flex-col md:flex-row items-end gap-4">
                 <div class="w-full md:w-1/3">
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Select Payroll Period</label>
-                    <div class="relative">
-                        <select id="PeriodSelect" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
-                            <option value="na">Loading periods...</option>
-                        </select>
-                        <span class="material-icons-round absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
+                    <div class="space-y-4">
+                        <!-- Scope Selection -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Process Scope</label>
+                                <select id="MemberScope" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="all">All Active Members</option>
+                                    <option value="single">Single Member</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Period Mode</label>
+                                <select id="PeriodScope" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="single">Single Period</option>
+                                    <option value="range">Period Range</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Inputs -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Member Select (Hidden by default) -->
+                            <div id="MemberSelectContainer" class="hidden md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Select Member</label>
+                                <select id="MemberSelect" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="">Loading members...</option>
+                                </select>
+                            </div>
+
+                            <!-- Start Period (Only for Range) -->
+                            <div id="StartPeriodContainer" class="hidden">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">From Period</label>
+                                <select id="StartPeriodSelect" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                                    <option value="">Select Start</option>
+                                </select>
+                            </div>
+
+                            <!-- End Period / Single Period -->
+                            <div class="w-full">
+                                <label id="EndPeriodLabel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Select Period</label>
+                                <div class="relative">
+                                    <select id="PeriodSelect" class="w-full pl-4 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-primary focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                                        <option value="na">Loading periods...</option>
+                                    </select>
+                                    <span class="material-icons-round absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
                 <button onclick="runProcess()" class="w-full md:w-auto px-6 py-2.5 bg-primary hover:bg-sky-600 text-white font-medium rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
                     <span>Process Period</span>
                     <span class="material-icons-round text-lg">arrow_forward</span>
@@ -123,6 +165,48 @@ if (!isset($_SESSION['UserID'])) {
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<style>
+    /* Select2 Tailwind Overrides */
+    .select2-container .select2-selection--single {
+        height: 46px !important;
+        border-radius: 0.75rem !important;
+        border-color: #e2e8f0 !important;
+        background-color: #f8fafc !important;
+        display: flex;
+        align-items: center;
+    }
+    .dark .select2-container .select2-selection--single {
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #334155 !important;
+        padding-left: 1rem !important;
+        font-size: 0.875rem !important;
+    }
+    .dark .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #e2e8f0 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 44px !important;
+        right: 10px !important;
+    }
+    .select2-dropdown {
+        border-radius: 0.75rem !important;
+        border-color: #e2e8f0 !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+    }
+    .dark .select2-dropdown {
+        background-color: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+    }
+    .select2-search__field {
+        border-radius: 0.5rem !important;
+    }
+</style>
 <script>
     let currentPage = 1;
     let totalPages = 1;
@@ -136,14 +220,65 @@ if (!isset($_SESSION['UserID'])) {
         $.post('process2_api.php', { action: 'fetch_periods' }, function(res) {
             if (res.status === 'success') {
                 const select = $('#PeriodSelect');
-                select.empty();
-                select.append('<option value="na">Select Period</option>');
+                const startSelect = $('#StartPeriodSelect');
+                
+                select.empty().append('<option value="na">Select Period</option>');
+                startSelect.empty().append('<option value="">Select Start</option>');
+                
+                // Sort periods chronologically for range logic if needed, but ID DESC is usually fine if we handle logic correctly.
+                // Actually, for "From -> To", it might be easier if we have the list.
+                // Let's keep the raw data for logic usage
+                window.allPeriods = res.data; 
+
                 res.data.forEach(p => {
                     select.append(`<option value="${p.Periodid}">${p.PayrollPeriod}</option>`);
+                    startSelect.append(`<option value="${p.Periodid}">${p.PayrollPeriod}</option>`);
                 });
             }
         }, 'json');
     }
+
+    // Load Members logic
+    function loadMembers() {
+        if ($('#MemberSelect option').length > 1) return; // Already loaded
+
+        $.post('process2_api.php', { action: 'fetch_all_members' }, function(res) {
+            if (res.status === 'success') {
+                const select = $('#MemberSelect');
+                select.empty().append('<option value="">Select a Member</option>');
+                res.data.forEach(m => {
+                    select.append(`<option value="${m.patientid}">${m.fullname} (${m.patientid})</option>`);
+                });
+                
+                // Initialize Select2
+                $('#MemberSelect').select2({
+                    width: '100%',
+                    placeholder: "Search for a member...",
+                    allowClear: true
+                });
+            }
+        }, 'json');
+    }
+
+    // UI Event Listeners
+    $('#MemberScope').change(function() {
+        if ($(this).val() === 'single') {
+            $('#MemberSelectContainer').removeClass('hidden');
+            loadMembers();
+        } else {
+            $('#MemberSelectContainer').addClass('hidden');
+        }
+    });
+
+    $('#PeriodScope').change(function() {
+        if ($(this).val() === 'range') {
+            $('#StartPeriodContainer').removeClass('hidden');
+            $('#EndPeriodLabel').text('To Period');
+        } else {
+            $('#StartPeriodContainer').addClass('hidden');
+            $('#EndPeriodLabel').text('Select Period');
+        }
+    });
 
     function loadDeductions(page) {
         $.post('process2_api.php', { action: 'fetch_deductions', page: page, limit: 20 }, function(res) {
@@ -198,20 +333,78 @@ if (!isset($_SESSION['UserID'])) {
     // --- Processing Logic ---
 
     window.runProcess = async function() {
-        const periodId = $('#PeriodSelect').val();
-        if (periodId === 'na' || !periodId) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Selection Required',
-                text: 'Please select a Period to Process Transaction',
-                confirmButtonColor: '#0ea5e9'
-            });
+        const memberScope = $('#MemberScope').val();
+        const periodScope = $('#PeriodScope').val();
+        
+        // 1. Resolve Periods
+        let targetPeriods = [];
+        const endPeriodId = $('#PeriodSelect').val();
+
+        if (endPeriodId === 'na' || !endPeriodId) {
+            Swal.fire({ icon: 'error', title: 'Selection Required', text: 'Please select a Period.' });
             return;
         }
 
+        if (periodScope === 'single') {
+            targetPeriods.push(endPeriodId);
+        } else {
+            const startPeriodId = $('#StartPeriodSelect').val();
+            if (!startPeriodId) {
+                Swal.fire({ icon: 'error', title: 'Selection Required', text: 'Please select a Start Period.' });
+                return;
+            }
+            
+            // Logic: Find all periods between start and end (inclusive)
+            // Assuming IDs are sequential or at least ordered via window.allPeriods
+            // We need to find the indices in window.allPeriods (which is DESC order usually)
+            
+            const pList = window.allPeriods; // defined in loadPeriods
+            const idxStart = pList.findIndex(p => p.Periodid == startPeriodId);
+            const idxEnd = pList.findIndex(p => p.Periodid == endPeriodId);
+
+            if (idxStart === -1 || idxEnd === -1) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Invalid Period Selection.' });
+                return;
+            }
+
+            // In DESC list: [105, 104, 103, 102]. Start=102 (idx 3), End=104 (idx 1). 
+            // Range is min(idxStart, idxEnd) to max(idxStart, idxEnd)
+            // But usually User selects Start (Oldest) to End (Newest) or vice/versa.
+            // We'll just take the range between them.
+            
+            const minIdx = Math.min(idxStart, idxEnd);
+            const maxIdx = Math.max(idxStart, idxEnd);
+            
+            // Extract and map just IDs
+            for (let i = minIdx; i <= maxIdx; i++) {
+                targetPeriods.push(pList[i].Periodid);
+            }
+        }
+
+        // 2. Resolve Members
+        let targetMembers = []; // If empty, means "ALL" - but better to make it explicit if we can.
+                                // Actually, existing logic fetches "All Active" on backend if specific list not sent.
+                                // But for progress bar accuracy, we MUST know the count beforehand.
+                                // So let's modify the flow: 
+                                // - If Single Member: [id]
+                                // - If All Members: Call 'fetch_members_to_process' ONCE to get the big list.
+        
+        const singleMemberId = $('#MemberSelect').val();
+        if (memberScope === 'single') {
+            if (!singleMemberId) {
+                Swal.fire({ icon: 'error', title: 'Selection Required', text: 'Please select a Member.' });
+                return;
+            }
+            targetMembers = [singleMemberId];
+        }
+
+        // CONFIRMATION
+        const periodText = periodScope === 'single' ? 'this period' : `${targetPeriods.length} periods`;
+        const memberText = memberScope === 'single' ? '1 member' : 'ALL members';
+        
         const result = await Swal.fire({
             title: 'Are you sure?',
-            text: "You are about to process transactions for this period. This action cannot be easily undone.",
+            text: `Process transactions for ${memberText} across ${periodText}?`,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#0ea5e9',
@@ -221,7 +414,7 @@ if (!isset($_SESSION['UserID'])) {
 
         if (!result.isConfirmed) return;
 
-        // Reset UI
+        // INIT UI
         $('#processingModal').removeClass('hidden');
         $('#processSpinner').removeClass('hidden');
         $('#processCompleteIcon').addClass('hidden');
@@ -229,59 +422,76 @@ if (!isset($_SESSION['UserID'])) {
         $('#processLog').addClass('hidden').empty();
         $('#progressBar').css('width', '0%');
         $('#processTitle').text('Preparing Batch...');
-        $('#processStatus').text('Fetching member list...');
-
+        
         try {
-            // 1. Fetch Members
-            const initRes = await $.post('process_transaction_api.php', { 
-                action: 'fetch_members_to_process',
-                period_id: periodId
-            }, null, 'json');
+            // Fetch ALL members if scope is 'all'
+            if (memberScope === 'all') {
+                $('#processStatus').text('Fetching full member list...');
+                // We pick the FIRST period ID to initialize the list? 
+                // Or just use any valid ID? The logic in backend just queries "Active" members, period_id wasn't strictly used for the LIST itself in process.php logic (it was just WHERE Status='Active').
+                // But my API implementation on line 30 of process_transaction_api.php doesn't use period_id for fetching members.
+                
+                const initRes = await $.post('process_transaction_api.php', { 
+                    action: 'fetch_members_to_process',
+                    period_id: targetPeriods[0] // just to satisfy param requirement if any
+                }, null, 'json');
 
-            if (initRes.status !== 'success') throw new Error(initRes.message);
+                if (initRes.status !== 'success') throw new Error(initRes.message);
+                targetMembers = initRes.data;
+            }
 
-            const memberIds = initRes.data;
-            const total = memberIds.length;
-            
-            if (total === 0) {
+            // MAIN LOOP
+            const totalOps = targetPeriods.length * targetMembers.length;
+            if (totalOps === 0) {
                 finishProcess(0, 0);
-                log('No active members found to process.');
+                log('Nothing to process.');
                 return;
             }
 
-            $('#processTitle').text('Processing Transactions');
-            
+            let currentOp = 0;
             let successCount = 0;
             let failCount = 0;
 
-            // 2. Loop & Process
-            for (let i = 0; i < total; i++) {
-                const memberId = memberIds[i];
-                const displayIdx = i + 1;
-                
-                // Update UI
-                const percent = Math.round((displayIdx / total) * 100);
-                $('#progressBar').css('width', percent + '%');
-                $('#progressCount').text(`${displayIdx} / ${total}`);
-                $('#progressPercent').text(`${percent}%`);
-                $('#processStatus').text(`Processing Member ID: ${memberId}...`);
+            $('#processTitle').text('Processing Transactions');
 
-                try {
-                    const procRes = await $.post('process_transaction_api.php', {
-                        action: 'process_member',
-                        member_id: memberId,
-                        period_id: periodId
-                    }, null, 'json');
+            // Iterate Periods -> then Members? Or Members -> then Periods?
+            // Usually safest to finish one period completely before moving to next?
+            // "starting from the lower period id to the last selected period id"
+            // We should sort targetPeriods ASC (Oldest first) just to be safe so logic flows naturally.
+            
+            targetPeriods.sort((a, b) => a - b); // Ascending numeric sort
 
-                    if (procRes.status === 'success') {
-                        successCount++;
-                    } else {
-                        throw new Error(procRes.message);
+            for (const pId of targetPeriods) {
+                for (const mId of targetMembers) {
+                    currentOp++;
+                    
+                    // Update UI
+                    const percent = Math.round((currentOp / totalOps) * 100);
+                    $('#progressBar').css('width', percent + '%');
+                    $('#progressCount').text(`${currentOp} / ${totalOps}`);
+                    $('#progressPercent').text(`${percent}%`);
+                    $('#processStatus').text(`Pd: ${pId} | Mem: ${mId}`);
+
+                    try {
+                        const procRes = await $.post('process_transaction_api.php', {
+                            action: 'process_member',
+                            member_id: mId,
+                            period_id: pId
+                        }, null, 'json');
+
+                        if (procRes.status === 'success') {
+                            successCount++;
+                        } else {
+                            throw new Error(procRes.message);
+                        }
+                    } catch (err) {
+                        failCount++;
+                        // Only log failures to avoid spamming the log area
+                        // log(`Err P:${pId} M:${mId} -> ${err.message || err}`); 
+                        // Actually, user might want to see errors.
+                        log(`[${pId}-${mId}] Error: ${err.message || err}`);
+                        $('#processLog').removeClass('hidden');
                     }
-                } catch (err) {
-                    failCount++;
-                    log(`Error Member ${memberId}: ${err.message || err}`);
-                    $('#processLog').removeClass('hidden'); // Show log if errors occur
                 }
             }
 
@@ -298,21 +508,21 @@ if (!isset($_SESSION['UserID'])) {
         $('#processCompleteIcon').removeClass('hidden');
         $('#processTitle').text('Processing Complete');
         
-        let msg = `Successfully processed ${success} transactions.`;
-        if (fail > 0) msg += ` Failed: ${fail}. Check logs below.`;
+        // Calculate distinct periods count for summary
         
+        let msg = `Completed. Success: ${success}, Failed: ${fail}.`;
         $('#processStatus').text(msg);
         $('#btnCloseProcess').removeClass('hidden');
     }
 
     function log(msg) {
-        const div = $('<div>').text(`[${new Date().toLocaleTimeString()}] ${msg}`);
+        const div = $('<div>').text(msg);
         $('#processLog').append(div);
     }
 
     window.closeProcessModal = function() {
         $('#processingModal').addClass('hidden');
-        loadDeductions(1); // Refresh table to show new balances (if logic updates them immediately, though deductions table reads from contributions, not mastertransaction. But good practice.)
+        loadDeductions(1); 
     }
 </script>
 
