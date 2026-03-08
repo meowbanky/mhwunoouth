@@ -37,12 +37,33 @@
                                         <span class="material-icons-round text-[14px]"><?php echo $genderIcon; ?></span> <?php echo $gender; ?>
                                     </span>
                                     <span class="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full"></span>
-                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Regular Member</span>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider <?php echo (strtolower($row['Status']) === 'active') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'; ?>">
+                                        <?php echo $row['Status'] ?: 'Active'; ?>
+                                    </span>
                                 </div>
                             </div>
-                            <button class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-                                <span class="material-icons-round">more_horiz</span>
-                            </button>
+                            <div class="relative">
+                                <button onclick="toggleDropdown(event, '<?php echo $row['patientid']; ?>')" class="dropdown-trigger text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+                                    <span class="material-icons-round">more_horiz</span>
+                                </button>
+                                <!-- Dropdown Menu -->
+                                <div id="dropdown-<?php echo $row['patientid']; ?>" class="dropdown-menu hidden absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
+                                    <div class="py-1">
+                                        <a href="member_details.php?id=<?php echo $row['patientid']; ?>" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                            <span class="material-icons-round text-slate-400 text-[18px]">visibility</span>
+                                            Full Details
+                                        </a>
+                                        <a href="edit_member.php?id=<?php echo $row['patientid']; ?>" class="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border-b border-slate-100 dark:border-slate-700/50">
+                                            <span class="material-icons-round text-slate-400 text-[18px]">edit</span>
+                                            Edit Details
+                                        </a>
+                                        <button onclick="toggleMemberStatus('<?php echo $row['patientid']; ?>')" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                            <span class="material-icons-round text-slate-400 text-[18px]">swap_horiz</span>
+                                            Toggle Status
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-y-3 mt-4">
                             <div class="flex flex-col">

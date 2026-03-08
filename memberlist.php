@@ -92,7 +92,7 @@ $offset = ($page - 1) * $perPage;
 $query_memberlist = "SELECT tbl_personalinfo.sfxname, tbl_personalinfo.patientid, 
                      concat(ifnull(tbl_personalinfo.Lname,''),', ',ifnull(tbl_personalinfo.Fname,''),' ',ifnull(tbl_personalinfo.Mname,'')) AS namee,
                      ifnull(tbl_personalinfo.gender,'Male') as gender, 
-                     tbl_personalinfo.MobilePhone, tbl_personalinfo.passport, 
+                     tbl_personalinfo.MobilePhone, tbl_personalinfo.passport, tbl_personalinfo.Status,
                      tbl_nok.NOkName, tbl_nok.NOKPhone
                      FROM tbl_personalinfo 
                      LEFT JOIN tbl_nok ON tbl_nok.patientId = tbl_personalinfo.patientid 
@@ -195,6 +195,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'autocomplete') {
     </div>
 </main>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 function exportToExcel() {
     // Clone the current URL search params
@@ -334,6 +335,76 @@ $(document).ready(function() {
         window.fetchMembersGlobal();
         return false;
     });
+
+    // Toggle Member Status
+    window.toggleMemberStatus = function(patientid) {
+        Swal.fire({
+            title: 'Change Status?',
+            text: 'Are you sure you want to toggle the status for this member?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0ea5e9',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, toggle it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    title: 'Updating...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                $.ajax({
+                    url: 'member_api.php',
+                    type: 'POST',
+                    data: { action: 'toggle_status', patientid: patientid },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.status === 'success') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Updated',
+                                text: res.message,
+                                timer: 1500,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.fetchMembersGlobal();
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: res.message
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An error occurred while toggling status.'
+                        });
+                    }
+                });
+            }
+        });
+    };
+
+    // Close dropdowns when clicking outside
+    $(document).on('click', function(e) {
+        if (!$(e.target).closest('.dropdown-trigger').length) {
+            $('.dropdown-menu').addClass('hidden');
+        }
+    });
+
+    window.toggleDropdown = function(e, id) {
+        e.stopPropagation();
+        const $menu = $('#dropdown-' + id);
+        $('.dropdown-menu').not($menu).addClass('hidden');
+        $menu.toggleClass('hidden');
+    }
 });
 </script>
 <?php include 'includes/footer.php'; ?>
