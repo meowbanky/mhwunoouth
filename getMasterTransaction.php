@@ -29,7 +29,7 @@ function fetchTransactions($conn, $periodFrom, $periodTo, $id = '')
   MIN(IFNULL(tbl_refund.amount,0)) AS 'refund',
   
   -- Running Contribution Balance (History <= Current Period)
-  (SELECT SUM(IFNULL(tm.Contribution,0)) - SUM(IFNULL(tm.withdrawal,0))
+  (SELECT SUM(IFNULL(tm.Contribution,0)) + SUM(IFNULL(tm.withdrawal,0))
    FROM tlb_mastertransaction tm 
    WHERE tm.memberid = tbl_personalinfo.patientid 
    AND tm.periodid <= tlb_mastertransaction.periodid
@@ -47,7 +47,7 @@ function fetchTransactions($conn, $periodFrom, $periodTo, $id = '')
   INNER JOIN tlb_mastertransaction ON tbl_personalinfo.patientid = tlb_mastertransaction.memberid
   INNER JOIN tbpayrollperiods ON tbpayrollperiods.Periodid = tlb_mastertransaction.periodid
   LEFT JOIN tbl_refund ON tbl_refund.membersid = tbl_personalinfo.patientid AND tbl_refund.periodid = tbpayrollperiods.Periodid
-  WHERE tbpayrollperiods.Periodid BETWEEN ? AND ?";
+  WHERE tbpayrollperiods.Periodid BETWEEN ? AND ? ";
 
   $queryParams[] = $periodFrom;
   $queryParams[] = $periodTo;
@@ -57,7 +57,7 @@ function fetchTransactions($conn, $periodFrom, $periodTo, $id = '')
     $queryParams[] = $id;
   }
 
-  $query .= " GROUP BY tlb_mastertransaction.periodid, tbl_personalinfo.patientid order by tbl_personalinfo.patientid";
+  $query .= " GROUP BY tlb_mastertransaction.periodid, tbl_personalinfo.patientid order by tbl_personalinfo.patientid, tbpayrollperiods.Periodid";
 
   try {
       $stmt = $conn->prepare($query);

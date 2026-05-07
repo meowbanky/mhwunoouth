@@ -61,6 +61,10 @@
             <span class="material-icons-round">payments</span>
             <span>Loans &amp; Finance</span>
         </a>
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('withdrawal.php', $currentPage); ?>" href="withdrawal.php">
+            <span class="material-icons-round">account_balance_wallet</span>
+            <span>Withdrawals</span>
+        </a>
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('loanContri_Compare.php', $currentPage); ?>" href="loanContri_Compare.php">
             <span class="material-icons-round">compare_arrows</span>
             <span>Loan Comparison</span>
@@ -102,7 +106,7 @@
             <span class="material-icons-round">backup</span>
             <span>Backup</span>
         </a>
-        <a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" href="index.php">
+        <a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" href="index.php?logout=true">
             <span class="material-icons-round">logout</span>
             <span>Logout</span>
         </a>

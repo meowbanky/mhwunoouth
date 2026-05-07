@@ -27,6 +27,17 @@ if (isset($_POST['uname']) && isset($_POST['passwd'])) {
                 $_SESSION['FirstName'] = $row['lastname'] . ", " . $row['firstname'];
                 $_SESSION['UserID'] = $row['UserID'];
 
+                // Remember Me Logic
+                if (isset($_POST['remember-me'])) {
+                    // Create a secure token based on UserID and Password hash. This invalidates the cookie if password changes.
+                    $secretKey = "MHWUN_REMEMBER_SECRET_KEY_2026"; 
+                    $signature = hash_hmac('sha256', $row['UserID'] . $row['UPassword'], $secretKey);
+                    $cookieValue = base64_encode($row['UserID'] . ':' . $signature);
+                    
+                    // Set cookie for 30 days (86400 * 30), HttpOnly
+                    setcookie('remember_me', $cookieValue, time() + (86400 * 30), "/", "", false, true);
+                }
+
                 header("Location: dashboard.php");
                 exit;
             } else {

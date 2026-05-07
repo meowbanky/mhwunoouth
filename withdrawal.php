@@ -8,8 +8,8 @@ if (!isset($_SESSION['UserID'])) {
 require_once('Connections/hms.php');
 // $conn is available from hms.php
 
-// Handle AJAX Request for adding loan
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_loan') {
+// Handle AJAX Request for adding withdrawal
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_withdrawal') {
     header('Content-Type: application/json');
     
     $coopId = isset($_POST['coopid']) ? trim($_POST['coopid']) : '';
@@ -17,63 +17,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // Prioritize POST period, then Session, then 0
     $period = isset($_POST['period']) ? $_POST['period'] : (isset($_SESSION['period']) ? $_SESSION['period'] : 0);
     
-    // Server-Side Interest Calculation
-    try {
-        $stmtSettings = $conn->query("SELECT * FROM tbl_settings LIMIT 1");
-        $settings = $stmtSettings->fetch(PDO::FETCH_ASSOC);
-        $rate = isset($settings['Interest']) ? floatval($settings['Interest']) : 0.1;
-    } catch (PDOException $e) {
-        $rate = 0.1;
-    }
-    
-    // Recalculate interest to ignore frontend manipulation
-    $interest = floatval($amount) * $rate;
-
     if (empty($coopId) || empty($amount) || empty($period)) {
         echo json_encode(['status' => 'error', 'message' => 'Missing required fields (ID, Amount, Period).']);
         exit;
     }
 
+    $withdrawalAmount = floatval($amount);
+
     try {
         $conn->beginTransaction();
 
-        // 1. Insert into tbl_loan
-        $stmt = $conn->prepare("INSERT INTO tbl_loan (memberid, periodid, loanamount, interest) VALUES (:memberid, :periodid, :loanamount, :interest)");
-        $stmt->execute([
-            ':memberid' => $coopId,
-            ':periodid' => $period,
-            ':loanamount' => floatval($amount) + 100, // Preserving original logic
-            ':interest' => $interest
-        ]);
-        $loanID = $conn->lastInsertId();
+        // Check the current balance first to validate it in backend
+        $stmtBalance = $conn->prepare("SELECT (IFNULL(SUM(Contribution),0) + IFNULL(SUM(withdrawal),0)) AS balance FROM tlb_mastertransaction WHERE memberid = :memberid");
+        $stmtBalance->execute([':memberid' => $coopId]);
+        $rowBalance = $stmtBalance->fetch(PDO::FETCH_ASSOC);
+        $currentBalance = $rowBalance['balance'] ?? 0;
 
-        // 2. Insert into tlb_mastertransaction
-         $stmtMaster = $conn->prepare("INSERT INTO tlb_mastertransaction (periodid, memberid, loanid, loanAmount, interest) VALUES (:periodid, :memberid, :loanid, :loanamount, :interest)");
-         $stmtMaster->execute([
+        if ($withdrawalAmount > $currentBalance) {
+            echo json_encode(['status' => 'error', 'message' => 'Insufficient savings balance.']);
+            $conn->rollBack();
+            exit;
+        }
+
+        // Insert into tlb_mastertransaction as a negative amount for withdrawal
+        $negativeAmount = -$withdrawalAmount;
+        $stmtMaster = $conn->prepare("INSERT INTO tlb_mastertransaction (periodid, memberid, withdrawal) VALUES (:periodid, :memberid, :withdrawal)");
+        $stmtMaster->execute([
             ':periodid' => $period,
             ':memberid' => $coopId,
-            ':loanid' => $loanID,
-            ':loanamount' => floatval($amount) + 100,
-            ':interest' => $interest
-         ]);
-
-        // 3. Insert into tbl_bank_schedule
-        // Fetch name first
-        $stmtName = $conn->prepare("SELECT concat(ifnull(Lname,''),' ',ifnull(Fname,''),' ',ifnull(Mname,'')) as `name` FROM tbl_personalinfo WHERE patientid = :patientid");
-        $stmtName->execute([':patientid' => $coopId]);
-        $row_name = $stmtName->fetch(PDO::FETCH_ASSOC);
-        $memberName = $row_name ? $row_name['name'] : '';
-
-        $stmtBank = $conn->prepare("INSERT INTO tbl_bank_schedule (memberid, name, periodid, loanamount) VALUES (:memberid, :name, :periodid, :loanamount)");
-        $stmtBank->execute([
-            ':memberid' => $coopId,
-            ':name' => $memberName,
-            ':periodid' => $period,
-            ':loanamount' => floatval($amount)
+            ':withdrawal' => $negativeAmount
         ]);
 
         $conn->commit();
-        echo json_encode(['status' => 'success', 'message' => 'Loan added successfully']);
+        echo json_encode(['status' => 'success', 'message' => 'Withdrawal posted successfully']);
 
     } catch (PDOException $e) {
         $conn->rollBack();
@@ -91,43 +67,33 @@ try {
     die("Error fetching periods: " . $e->getMessage());
 }
 
-// Fetch Recent Loans (Batch) for Table
+// Fetch Recent Withdrawals (Batch) for Table
 $col_Batch = isset($_SESSION['period']) ? $_SESSION['period'] : "-1";
 
 try {
     $query_Batch = "SELECT CONCAT(tbl_personalinfo.Lname,' , ',tbl_personalinfo.Fname,' ',(ifnull(tbl_personalinfo.Mname,' '))) AS `name`, 
-                        (tbl_loan.loanamount + tbl_loan.interest) as loanamount, 
-                        tbl_loan.loanid, tbl_loan.periodid, tbl_loan.memberid, 
-                        tbl_contributions.loan as loanrepayment 
+                        abs(tlb_mastertransaction.withdrawal) as withdrawalamount, 
+                        tlb_mastertransaction.transactionid, tlb_mastertransaction.periodid, tlb_mastertransaction.memberid 
                         FROM tbl_personalinfo 
-                        INNER JOIN tbl_loan ON tbl_loan.memberid = tbl_personalinfo.patientid 
-                        LEFT JOIN tbl_contributions ON tbl_contributions.membersid = tbl_personalinfo.patientid 
-                        WHERE tbl_loan.periodid = :periodid ORDER BY tbl_loan.loanid DESC";
+                        INNER JOIN tlb_mastertransaction ON tlb_mastertransaction.memberid = tbl_personalinfo.patientid 
+                        WHERE tlb_mastertransaction.periodid = :periodid 
+                        AND tlb_mastertransaction.withdrawal < 0 
+                        ORDER BY tlb_mastertransaction.transactionid DESC";
     $stmtBatch = $conn->prepare($query_Batch);
     $stmtBatch->execute([':periodid' => $col_Batch]);
-    $batchLoans = $stmtBatch->fetchAll(PDO::FETCH_ASSOC);
+    $batchWithdrawals = $stmtBatch->fetchAll(PDO::FETCH_ASSOC);
 
     // Calculate Totals
-    $stmtSum = $conn->prepare("SELECT (sum(loanamount)+sum(interest)) as amount FROM tbl_loan WHERE periodId = :periodid");
+    $stmtSum = $conn->prepare("SELECT abs(sum(withdrawal)) as amount FROM tlb_mastertransaction WHERE periodId = :periodid AND withdrawal < 0");
     $stmtSum->execute([':periodid' => $col_Batch]);
     $row_batchsum = $stmtSum->fetch(PDO::FETCH_ASSOC);
-    $totalLoanAmount = $row_batchsum['amount'] ?? 0;
+    $totalWithdrawalAmount = $row_batchsum['amount'] ?? 0;
 
 } catch (PDOException $e) {
-    die("Error fetching loans: " . $e->getMessage());
-}
-
-// Fetch Interest Rate from Settings
-try {
-    $stmtSettings = $conn->query("SELECT * FROM tbl_settings LIMIT 1");
-    $settings = $stmtSettings->fetch(PDO::FETCH_ASSOC);
-    $interestRate = isset($settings['Interest']) ? $settings['Interest'] : 0.1; // Default 10% if not found
-} catch (PDOException $e) {
-    $interestRate = 0.1;
+    die("Error fetching withdrawals: " . $e->getMessage());
 }
 
 ?>
-<input type="hidden" id="interestRate" value="<?php echo htmlspecialchars($interestRate); ?>" />
 <?php include 'includes/header.php'; ?>
 <?php include 'includes/sidebar.php'; ?>
 
@@ -140,8 +106,8 @@ try {
         <!-- Header -->
         <header class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Loan Application</h2>
-                <p class="text-slate-500 dark:text-slate-400">Create and preview new loan entries for staff members.</p>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Withdrawal Application</h2>
+                <p class="text-slate-500 dark:text-slate-400">Post new savings withdrawals for staff members.</p>
             </div>
             <div class="flex items-center gap-2">
                 <button class="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -154,13 +120,13 @@ try {
         <!-- Notification Area -->
         <div id="notification" class="hidden mb-6 p-4 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm font-medium"></div>
 
-        <!-- Add Loan Form -->
+        <!-- Add Withdrawal Form -->
         <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-10">
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20">
-                <h3 class="font-semibold text-slate-900 dark:text-white">Add New Loan</h3>
+                <h3 class="font-semibold text-slate-900 dark:text-white">Add New Withdrawal</h3>
             </div>
             <div class="p-6 md:p-8">
-                <form id="addLoanForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <form id="addWithdrawalForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div class="space-y-1">
                         <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Member ID</label>
                         <div class="relative flex items-center">
@@ -180,22 +146,17 @@ try {
                     </div>
                     
                     <div class="space-y-1">
-                         <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Current Balance (₦)</label>
-                         <input id="txtLoanBalance" class="w-full bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400" readonly="" type="text" value="0.00"/>
+                         <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Available Savings Balance (₦)</label>
+                         <input id="txtSavingsBalance" class="w-full bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400" readonly="" type="text" value="0.00"/>
                     </div>
 
                     <div class="space-y-1">
-                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount Granted (₦)</label>
-                        <input id="txtAmount" name="amount" class="w-full bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:ring-primary focus:border-primary" placeholder="0.00" type="text" onkeyup="formatNumber(this)" onblur="calculateInterest()"/>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Withdrawal Amount (₦)</label>
+                        <input id="txtAmount" name="amount" class="w-full bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:ring-primary focus:border-primary" placeholder="0.00" type="text" onkeyup="formatNumber(this)"/>
                     </div>
                     
                     <div class="space-y-1">
-                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Interest (₦)</label>
-                        <input id="txtInterest" name="interest" class="w-full bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400" type="text" value="0.00" readonly=""/>
-                    </div>
-
-                    <div class="space-y-1">
-                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Repayment Period</label>
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Posting Period</label>
                         <div class="flex gap-2">
                             <select id="PeriodId" name="period" class="flex-1 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:ring-primary focus:border-primary" onchange="setPeriod(this.value)">
                                 <option value="">Select Period</option>
@@ -208,10 +169,10 @@ try {
                         </div>
                     </div>
 
-                    <div class="md:col-span-2 lg:col-span-3 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                        <button id="btnAddLoan" class="bg-primary hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2" type="button">
+                    <div class="md:col-span-2 lg:col-span-1 pt-4 flex justify-end items-end">
+                        <button id="btnAddWithdrawal" class="w-full bg-primary hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2" type="button">
                             <span class="material-icons-round text-sm">add</span>
-                            Add Loan to Schedule
+                            Post Withdrawal
                         </button>
                     </div>
                 </form>
@@ -223,7 +184,7 @@ try {
             <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="flex items-center gap-2">
                     <span class="material-icons-round text-primary">visibility</span>
-                    <h3 class="font-semibold text-slate-900 dark:text-white">Loan Preview Schedule</h3>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Withdrawal Preview Schedule</h3>
                 </div>
             </div>
             <div class="overflow-x-auto">
@@ -231,14 +192,14 @@ try {
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-800/30">
                             <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Name</th>
-                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Loan Amount</th>
-                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Ref</th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Withdrawal Amount</th>
+                            <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">Ref (Txn ID)</th>
                              <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800" id="loanTableBody">
-                        <?php if (count($batchLoans) > 0) { ?>
-                            <?php foreach ($batchLoans as $row) { ?>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800" id="withdrawalTableBody">
+                        <?php if (count($batchWithdrawals) > 0) { ?>
+                            <?php foreach ($batchWithdrawals as $row) { ?>
                                 <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
                                     <td class="px-6 py-4">
                                         <div class="flex flex-col">
@@ -246,21 +207,21 @@ try {
                                             <span class="text-[11px] text-slate-500">ID: <?php echo htmlspecialchars($row['memberid']); ?></span>
                                         </div>
                                     </td>
-                                    <td class="px-6 py-4 text-sm font-medium">₦<?php echo number_format($row['loanamount'], 2); ?></td>
-                                    <td class="px-6 py-4 text-sm font-medium text-slate-500">#<?php echo htmlspecialchars($row['loanid']); ?></td>
+                                    <td class="px-6 py-4 text-sm font-medium">₦<?php echo number_format($row['withdrawalamount'], 2); ?></td>
+                                    <td class="px-6 py-4 text-sm font-medium text-slate-500">#<?php echo htmlspecialchars($row['transactionid']); ?></td>
                                     <td class="px-6 py-4 text-right">
-                                         <button class="text-red-500 hover:text-red-700" onclick="deleteLoan(<?php echo $row['loanid']; ?>)"><span class="material-icons-round text-sm">delete</span></button>
+                                         <button class="text-red-500 hover:text-red-700" onclick="deleteWithdrawal(<?php echo $row['transactionid']; ?>)"><span class="material-icons-round text-sm">delete</span></button>
                                     </td>
                                 </tr>
                             <?php } ?>
                         <?php } else { ?>
-                            <tr><td colspan="4" class="px-6 py-4 text-center text-slate-500 italic">No loans found for this period</td></tr>
+                            <tr><td colspan="4" class="px-6 py-4 text-center text-slate-500 italic">No withdrawals found for this period</td></tr>
                         <?php } ?>
                     </tbody>
-                    <tfoot id="loanTableFoot">
+                    <tfoot id="withdrawalTableFoot">
                         <tr class="bg-slate-50/50 dark:bg-slate-800/10">
                             <td class="px-6 py-4 font-bold text-sm">Totals</td>
-                            <td class="px-6 py-4 font-bold text-sm text-primary">₦<?php echo number_format($totalLoanAmount, 2); ?></td>
+                            <td class="px-6 py-4 font-bold text-sm text-primary">₦<?php echo number_format($totalWithdrawalAmount, 2); ?></td>
                             <td colspan="2"></td>
                         </tr>
                     </tfoot>
@@ -274,7 +235,6 @@ try {
 <!-- Scripts -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
 <script>
-    // Include the original formatNumber logic
     function formatNumber(myElement) {
         var myVal = "";
         var myDec = "";
@@ -302,7 +262,7 @@ try {
     function clearSearch() {
         $('#txtCoopid').val('');
         $('#txtMemberName').val('');
-        $('#txtLoanBalance').val('0.00');
+        $('#txtSavingsBalance').val('0.00');
         $('#btnClearSearch').addClass('hidden');
         $('#suggestions').hide();
         $('#txtCoopid').focus();
@@ -327,52 +287,47 @@ try {
         $('#txtCoopid').val(thisValue);
         $('#txtMemberName').val(thisName);
         toggleClearBtn(thisValue);
-        // Hide with a slight delay to allow click to register if needed, though immediate is usually fine with onclick
         setTimeout(function() {
              $('#suggestions').hide();
         }, 100);
-        getLoanBalance(thisValue);
+        getSavingsBalance(thisValue);
         
-        // Autofocus Amount
         $('#txtAmount').focus();
     }
     
-    // Get Loan Balance via AJAX
-    function getLoanBalance(id) {
-        $.get("loanBalance.php?id="+id, function(data){
-            $('#txtLoanBalance').val(data.trim());
+    // Get Savings Balance via AJAX
+    function getSavingsBalance(id) {
+        $.get("getSavingsBalance.php?id="+id, function(data){
+            $('#txtSavingsBalance').val(data.trim());
         });
     }
-
 
     // Set Period Logic
     function setPeriod(periodId) {
         if (periodId) {
-            loadLoanTable(periodId);
+            loadWithdrawalTable(periodId);
         }
     }
 
-    // Load Loan Table
-    function loadLoanTable(periodId = null) {
-        // If no period passed, try to get from dropdown
+    // Load Withdrawal Table
+    function loadWithdrawalTable(periodId = null) {
         if (!periodId) {
             periodId = $('#PeriodId').val();
         }
         
-        // If still empty, maybe default or nothing
-        var url = "fetch_loans.php";
+        var url = "fetch_withdrawals.php";
         if (periodId) {
             url += "?period=" + periodId;
         }
 
         $.getJSON(url, function(data) {
-            $('#loanTableBody').html(data.body);
-            $('#loanTableFoot').html(data.footer);
+            $('#withdrawalTableBody').html(data.body);
+            $('#withdrawalTableFoot').html(data.footer);
         });
     }
 
-    // Delete Loan
-    function deleteLoan(loanID) {
+    // Delete Withdrawal
+    function deleteWithdrawal(transactionId) {
         Swal.fire({
             title: 'Are you sure?',
             text: "You won't be able to revert this!",
@@ -383,42 +338,32 @@ try {
             confirmButtonText: 'Yes, delete it!'
         }).then((result) => {
             if (result.isConfirmed) {
-                 $.get("deleteLoan.php?loanID="+loanID, function(data){
-                    Swal.fire(
-                        'Deleted!',
-                        'Loan has been deleted.',
-                        'success'
-                    ).then(() => {
-                        loadLoanTable(); // Refresh table without reload
-                    });
-                });
+                 $.get("deleteWithdrawal.php?transactionid="+transactionId, function(data){
+                    if (data.status === 'success') {
+                        Swal.fire(
+                            'Deleted!',
+                            'Withdrawal has been deleted.',
+                            'success'
+                        ).then(() => {
+                            loadWithdrawalTable(); 
+                        });
+                    } else {
+                        Swal.fire('Error', data.message, 'error');
+                    }
+                }, "json");
             }
         })
     }
     
-    // Set Period Logic
-
-    // Calculate Interest
-    function calculateInterest() {
-        var amountStr = $('#txtAmount').val().replace(/,/g, '');
-        var amount = parseFloat(amountStr);
-        var rate = parseFloat($('#interestRate').val());
-        
-        if (!isNaN(amount) && !isNaN(rate)) {
-            var interest = amount * rate;
-            $('#txtInterest').val(interest); 
-        }
-    }
-
-    // Add Loan Submission
+    // Add Withdrawal Submission
     $(document).ready(function() {
-        $('#btnAddLoan').click(function() {
+        $('#btnAddWithdrawal').click(function() {
             var coopid = $('#txtCoopid').val();
-            var amount = $('#txtAmount').val();
-            var interest = $('#txtInterest').val();
+            var amountStr = $('#txtAmount').val().replace(/,/g, '');
+            var balanceStr = $('#txtSavingsBalance').val().replace(/,/g, '');
             var period = $('#PeriodId').val();
 
-            if(coopid == '' || amount == '') {
+            if(coopid == '' || amountStr == '') {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Missing Information',
@@ -431,34 +376,44 @@ try {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Missing Period',
-                    text: 'Please select a repayment period.'
+                    text: 'Please select a posting period.'
                 });
                 return;
             }
 
-            $.post("addloan.php", {
-                action: 'add_loan',
+            var amount = parseFloat(amountStr);
+            var balance = parseFloat(balanceStr);
+
+            if(amount > balance) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Insufficient Funds',
+                    text: 'Withdrawal amount cannot exceed the available savings balance.'
+                });
+                return;
+            }
+
+            $.post("withdrawal.php", {
+                action: 'add_withdrawal',
                 coopid: coopid,
-                amount: amount,
-                interest: interest,
+                amount: amountStr, // Send as string or number, backend parses it
                 period: period
             }, function(response) {
                 if(response.status === 'success') {
                     Swal.fire({
                         icon: 'success',
                         title: 'Success',
-                        text: 'Loan added successfully',
+                        text: 'Withdrawal posted successfully',
                         timer: 1500,
                         showConfirmButton: false
                     }).then(() => {
                         // Clear inputs
                         $('#txtCoopid').val('');
                         $('#txtMemberName').val('');
-                        $('#txtLoanBalance').val('0.00');
+                        $('#txtSavingsBalance').val('0.00');
                         $('#txtAmount').val('');
-                        $('#txtInterest').val('0.00');
                         
-                        loadLoanTable(); // Refresh table
+                        loadWithdrawalTable(); 
                     });
                 } else {
                     Swal.fire({

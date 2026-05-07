@@ -3,6 +3,73 @@
 if (!isset($_SESSION)) {
     session_start();
 }
+
+// Handle Logout
+if (isset($_GET['logout']) && $_GET['logout'] == 'true') {
+    // Unset all session variables
+    $_SESSION = array();
+    // Destroy the session
+    session_destroy();
+    
+    // Clear the remember me cookie
+    if (isset($_COOKIE['remember_me'])) {
+        setcookie('remember_me', '', time() - 3600, "/");
+        unset($_COOKIE['remember_me']);
+    }
+    
+    // Redirect to clear the query string
+    header("Location: index.php");
+    exit;
+}
+
+// Redirect if already logged in
+if (isset($_SESSION['UserID'])) {
+    header("Location: dashboard.php");
+    exit;
+}
+
+// Check for Remember Me cookie
+if (isset($_COOKIE['remember_me'])) {
+    require_once('Connections/hms.php');
+    
+    $cookieValue = base64_decode($_COOKIE['remember_me']);
+    if ($cookieValue !== false) {
+        $cookieParts = explode(':', $cookieValue);
+        if (count($cookieParts) === 2) {
+            $cookieUserID = $cookieParts[0];
+            $cookieSignature = $cookieParts[1];
+            
+            try {
+                // We use $conn if available, otherwise fallback to mysqli
+                if (isset($conn)) {
+                    $stmt = $conn->prepare("SELECT UserID, firstname, lastname, UPassword FROM tblusers WHERE UserID = :userid AND status = 'Active' AND access = 1");
+                    $stmt->bindParam(':userid', $cookieUserID, PDO::PARAM_INT);
+                    $stmt->execute();
+                    
+                    if ($stmt->rowCount() > 0) {
+                        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        $secretKey = "MHWUN_REMEMBER_SECRET_KEY_2026";
+                        $expectedSignature = hash_hmac('sha256', $row['UserID'] . $row['UPassword'], $secretKey);
+                        
+                        if (hash_equals($expectedSignature, $cookieSignature)) {
+                            // Valid cookie, auto login
+                            session_regenerate_id(true);
+                            $_SESSION['FirstName'] = $row['lastname'] . ", " . $row['firstname'];
+                            $_SESSION['UserID'] = $row['UserID'];
+                            
+                            header("Location: dashboard.php");
+                            exit;
+                        }
+                    }
+                }
+            } catch (PDOException $e) {
+                // Silently fail on DB error during auto-login
+                error_log("Auto-login Error: " . $e->getMessage());
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html class="light" lang="en">
