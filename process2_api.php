@@ -22,7 +22,7 @@ try {
             $query = "SELECT patientid, CONCAT(Lname, ' ', Fname, ' ', IFNULL(Mname, '')) as fullname 
                       FROM tbl_personalinfo 
                       WHERE Status = 'Active' 
-                      ORDER BY Lname ASC";
+                      ORDER BY patientid ASC";
             $stmt = $conn->query($query);
             $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $response['status'] = 'success';
@@ -43,7 +43,7 @@ try {
             $totalPages = ceil($totalRecords / $limit);
 
             // Grand Total Query (Sum of EVERYTHING in the table, effectively "Current Standing")
-            $sumQuery = "SELECT SUM(loan) as total_loan, SUM(contribution) as total_contri FROM tbl_contributions";
+            $sumQuery = "SELECT SUM(loan) as total_loan, SUM(contribution) as total_contri FROM tbl_contributions INNER JOIN tbl_personalinfo ON tbl_personalinfo.patientid = tbl_contributions.membersid WHERE tbl_personalinfo.status = 'Active'";
             $sumStmt = $conn->query($sumQuery);
             $sums = $sumStmt->fetch(PDO::FETCH_ASSOC);
             $grandTotal = ($sums['total_loan'] ?? 0) + ($sums['total_contri'] ?? 0);
@@ -57,7 +57,8 @@ try {
                         (tbl_contributions.contribution + tbl_contributions.loan) as total 
                       FROM tbl_contributions 
                       INNER JOIN tbl_personalinfo ON tbl_personalinfo.patientid = tbl_contributions.membersid 
-                      ORDER BY tbl_personalinfo.Lname ASC 
+                      WHERE tbl_personalinfo.status = 'Active'
+                      ORDER BY tbl_personalinfo.patientid ASC 
                       LIMIT $limit OFFSET $offset";
             
             $stmt = $conn->query($query);

@@ -77,6 +77,10 @@ require_once('Connections/hms.php');
                                 </div>
                             </div>
                         </div>
+                        <div class="flex items-center gap-2 px-1">
+                            <input type="checkbox" id="sendSMS" class="w-4 h-4 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer" checked>
+                            <label for="sendSMS" class="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer">Send SMS Notifications</label>
+                        </div>
                     </div>
                 <button onclick="runProcess()" class="w-full md:w-auto px-6 py-2.5 bg-primary hover:bg-sky-600 text-white font-medium rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2">
                     <span>Process Period</span>
@@ -423,6 +427,8 @@ require_once('Connections/hms.php');
         $('#progressBar').css('width', '0%');
         $('#processTitle').text('Preparing Batch...');
         
+        const sendSMS = $('#sendSMS').is(':checked') ? 1 : 0;
+        
         try {
             // Fetch ALL members if scope is 'all'
             if (memberScope === 'all') {
@@ -476,7 +482,8 @@ require_once('Connections/hms.php');
                         const procRes = await $.post('process_transaction_api.php', {
                             action: 'process_member',
                             member_id: mId,
-                            period_id: pId
+                            period_id: pId,
+                            send_sms: sendSMS
                         }, null, 'json');
 
                         if (procRes.status === 'success') {

@@ -157,7 +157,9 @@ try {
                 }
             }
             
-                if ($notificationService) {
+                $sendSMS = $_POST['send_sms'] ?? '0';
+
+                if ($notificationService && $sendSMS == '1') {
                     // Check SMS Balance before sending
                     // Standard Transaction Alert is typically 1 page.
                     // Cost = 5.0
