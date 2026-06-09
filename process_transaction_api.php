@@ -80,80 +80,68 @@ try {
             }
 
             // 3. Calculate Current Balances
-            // Logic ported from process.php: $balancesSQL
-            // Note: PHP 8 string quoting for SQL
-
-            $balSql = "SELECT 
-                        IFNULL((SUM(loanAmount) + SUM(interest)), 0) 
+            $balSql = "SELECT
+                        IFNULL((SUM(loanAmount) + SUM(interest)), 0)
                         - (SUM(loanRepayment) + SUM(repayment_bank)) AS Loanbalance
-                       FROM tlb_mastertransaction 
+                       FROM tlb_mastertransaction
                        WHERE memberid = ?";
-            
+
             $balStmt = $conn->prepare($balSql);
             $balStmt->execute([$memberId]);
             $balanceRow = $balStmt->fetch(PDO::FETCH_ASSOC);
-            
+
             $currentLoanBalance = floatval($balanceRow['Loanbalance']);
+
+            // 3b. Check for bank deposit (tbl_teller) for this member + period
+            $tellerStmt = $conn->prepare(
+                "SELECT repayment_bank, teller_upload FROM tbl_teller WHERE memberid = ? AND periodid = ? LIMIT 1"
+            );
+            $tellerStmt->execute([$memberId, $periodId]);
+            $tellerRow   = $tellerStmt->fetch(PDO::FETCH_ASSOC);
+            $bankDeposit = $tellerRow ? floatval($tellerRow['repayment_bank']) : 0;
+            $tellerFile  = $tellerRow ? ($tellerRow['teller_upload'] ?? '') : '';
 
             // 4. Processing Logic (The "If-Else" Maze from process.php)
             
             // Case A: No Loan Balance & No Monthly Loan Deduction -> Simple Contribution
             if ($currentLoanBalance <= 0 && $monthlyLoanDeduction <= 0) {
-                insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0);
+                insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0, $bankDeposit, $tellerFile);
             }
-            
-            // Case B: No Loan Balance BUT Monthly Loan Deduction Trying to run -> Refund Overshoot
-            // (Legacy: ($row_balances['Loanbalance'] <= 0) && ($row_balances['contLoan'] > 0 ))
+
+            // Case B: No Loan Balance BUT Monthly Loan Deduction trying to run -> Refund Overshoot
             elseif ($currentLoanBalance <= 0 && $monthlyLoanDeduction > 0) {
-                // 1. Insert Transaction (Just Contribution)
-                insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0);
-                
-                // 2. Refund the Loan Deduction Amount (Since they don't owe anything)
-                // Note: The logic in process.php actually refunded ($row_balances['contLoan'] - $row_balances['Loanbalance'])
-                // But $row_balances['Loanbalance'] is <= 0 (e.g. -500), so -(-500) = +500.
-                // Wait, if Loanbalance is negative, it means they overpaid? 
-                // Legacy logic: $refund = ($row_balances['contLoan'] - $row_balances['Loanbalance']);
-                // Example: Deduction=5000, Balance=-1000. Refund = 5000 - (-1000) = 6000.
-                // This implies refreshing the negative balance AND the new deduction? 
-                // Let's stick strictly to legacy logic formula.
-                
-                $refundAmount = $monthlyLoanDeduction - $currentLoanBalance; 
-                
-                insertRefund($conn, $periodId, $memberId, $monthlyLoanDeduction); // Original code inserted 'contLoan' into tbl_refund...
-                insertMasterRefund($conn, $periodId, $memberId, $refundAmount);   // ...but 'refund' calculated value into tlb_mastertransaction
+                insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0, $bankDeposit, $tellerFile);
+
+                $refundAmount = $monthlyLoanDeduction - $currentLoanBalance;
+                insertRefund($conn, $periodId, $memberId, $monthlyLoanDeduction);
+                insertMasterRefund($conn, $periodId, $memberId, $refundAmount);
             }
-            
+
             // Case C: Has Loan Balance
             elseif ($currentLoanBalance > 0) {
-                
+
                 if ($monthlyLoanDeduction > 0) {
-                    
+
                     // C1: Balance > Deduction (Normal Repayment)
                     if ($currentLoanBalance > $monthlyLoanDeduction) {
-                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $monthlyLoanDeduction, 0);
+                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $monthlyLoanDeduction, 0, $bankDeposit, $tellerFile);
                     }
-                    
+
                     // C2: Balance < Deduction (Last Repayment + Refund Excess)
                     elseif ($currentLoanBalance < $monthlyLoanDeduction) {
-                         // Pay off exact remaining balance
-                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $currentLoanBalance, 0);
-                        
-                        // Refund the difference
+                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $currentLoanBalance, 0, $bankDeposit, $tellerFile);
+
                         $refundDiff = $monthlyLoanDeduction - $currentLoanBalance;
-                        
                         insertRefund($conn, $periodId, $memberId, $refundDiff);
                         insertMasterRefund($conn, $periodId, $memberId, $refundDiff);
                     }
-                    
+
                     // C3: Balance == Deduction (Exact Finish)
                     else {
-                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $monthlyLoanDeduction, 0);
+                        insertTransaction($conn, $periodId, $memberId, $monthlyContribution, $monthlyLoanDeduction, 0, $bankDeposit, $tellerFile);
                     }
-                } 
-                else {
-                    // Loan exists but deduction is 0?
-                    // Legacy: elseif($row_balances['contLoan'] ==  0 )
-                    insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0);
+                } else {
+                    insertTransaction($conn, $periodId, $memberId, $monthlyContribution, 0, 0, $bankDeposit, $tellerFile);
                 }
             }
             
@@ -196,11 +184,11 @@ echo json_encode($response);
 
 // --- Helper Functions ---
 
-function insertTransaction($conn, $periodId, $memberId, $contribution, $loanRepayment, $refund) {
-    $sql = "INSERT INTO tlb_mastertransaction (periodid, memberid, Contribution, loanRepayment, refund, completed) 
-            VALUES (?, ?, ?, ?, ?, 1)";
+function insertTransaction($conn, $periodId, $memberId, $contribution, $loanRepayment, $refund, $repaymentBank = 0, $tellerUpload = '') {
+    $sql = "INSERT INTO tlb_mastertransaction (periodid, memberid, Contribution, loanRepayment, refund, repayment_bank, teller_upload, completed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)";
     $stmt = $conn->prepare($sql);
-    $stmt->execute([$periodId, $memberId, $contribution, $loanRepayment, $refund]);
+    $stmt->execute([$periodId, $memberId, $contribution, $loanRepayment, $refund, $repaymentBank, $tellerUpload]);
 }
 
 function insertRefund($conn, $periodId, $memberId, $amount) {

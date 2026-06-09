@@ -65,6 +65,10 @@
             <span class="material-icons-round">account_balance_wallet</span>
             <span>Withdrawals</span>
         </a>
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bank_deposit.php', $currentPage); ?>" href="bank_deposit.php">
+            <span class="material-icons-round">account_balance</span>
+            <span>Bank Deposits</span>
+        </a>
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('loanContri_Compare.php', $currentPage); ?>" href="loanContri_Compare.php">
             <span class="material-icons-round">compare_arrows</span>
             <span>Loan Comparison</span>
