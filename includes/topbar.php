@@ -123,6 +123,12 @@ if (!function_exists('formatCurrency')) {
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('addloan.php'); ?>" href="addloan.php">
             <span class="material-icons-round text-xl">payments</span> Loans
         </a>
+        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('withdrawal.php'); ?>" href="withdrawal.php">
+            <span class="material-icons-round text-xl">account_balance_wallet</span> Withdrawals
+        </a>
+        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bank_deposit.php'); ?>" href="bank_deposit.php">
+            <span class="material-icons-round text-xl">account_balance</span> Bank Deposits
+        </a>
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('loanContri_Compare.php'); ?>" href="loanContri_Compare.php">
             <span class="material-icons-round text-xl">compare_arrows</span> Loan Comparison
         </a>
@@ -138,7 +144,10 @@ if (!function_exists('formatCurrency')) {
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bulksms.php'); ?>" href="bulksms.php">
             <span class="material-icons-round text-xl">sms</span> SMS Center
         </a>
-        
+        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('dnd_status_checker.php'); ?>" href="dnd_status_checker.php">
+            <span class="material-icons-round text-xl">do_not_disturb_on</span> DND Checker
+        </a>
+
         <div class="px-3 pt-4 pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">System</div>
         
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('transact_period.php'); ?>" href="transact_period.php">
