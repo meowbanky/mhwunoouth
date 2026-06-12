@@ -93,6 +93,52 @@ try {
             }
             break;
 
+        case 'test_sig_variants':
+            // Try all signature variants and report which one the API accepts
+            $ts      = time();
+            $key     = OOUTH_API_KEY;
+            $secret  = OOUTH_API_SECRET;
+            $sigStr  = $key . $ts;
+            $decoded = hex2bin($secret);
+
+            $variants = [
+                'hex_raw_secret'    => hash_hmac('sha256', $sigStr, $secret),
+                'hex_decoded_secret'=> hash_hmac('sha256', $sigStr, $decoded),
+                'b64_raw_secret'    => base64_encode(hash_hmac('sha256', $sigStr, $secret,  true)),
+                'b64_decoded_secret'=> base64_encode(hash_hmac('sha256', $sigStr, $decoded, true)),
+                'ts_only_hex'       => hash_hmac('sha256', (string)$ts, $secret),
+                'ts_only_hex_dec'   => hash_hmac('sha256', (string)$ts, $decoded),
+            ];
+
+            $results = [];
+            foreach ($variants as $name => $sig) {
+                $ch = curl_init(OOUTH_API_BASE_URL . '/auth/token');
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_CUSTOMREQUEST  => 'POST',
+                    CURLOPT_TIMEOUT        => 10,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_HTTPHEADER     => [
+                        'Content-Type: application/json',
+                        'Accept: application/json',
+                        'X-API-Key: '    . $key,
+                        'X-Timestamp: '  . $ts,
+                        'X-Signature: '  . $sig,
+                    ],
+                ]);
+                $raw  = curl_exec($ch);
+                $err  = curl_error($ch);
+                curl_close($ch);
+                $resp = $err ? ['curl_error' => $err] : json_decode($raw, true);
+                $results[$name] = [
+                    'sig'     => substr($sig, 0, 20) . '...',
+                    'success' => $resp['success'] ?? false,
+                    'code'    => $resp['error']['code'] ?? ($resp['success'] ? 'OK' : '?'),
+                ];
+            }
+            echo json_encode(['success' => true, 'timestamp' => $ts, 'variants' => $results]);
+            break;
+
         default:
             throw new Exception('Invalid action specified');
     }
