@@ -102,6 +102,10 @@
             <span class="material-icons-round">fact_check</span>
             <span>Process Transaction</span>
         </a>
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('api_upload.php', $currentPage); ?>" href="api_upload.php">
+            <span class="material-icons-round">cloud_upload</span>
+            <span>API Upload</span>
+        </a>
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('registeruser.php', $currentPage); ?>" href="registeruser.php">
             <span class="material-icons-round">manage_accounts</span>
             <span>User Management</span>

@@ -156,6 +156,9 @@ if (!function_exists('formatCurrency')) {
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('process2.php'); ?>" href="process2.php">
             <span class="material-icons-round text-xl">fact_check</span> Process Transaction
         </a>
+        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('api_upload.php'); ?>" href="api_upload.php">
+            <span class="material-icons-round text-xl">cloud_upload</span> API Upload
+        </a>
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('registeruser.php'); ?>" href="registeruser.php">
             <span class="material-icons-round text-xl">settings</span> User Settings
         </a>
