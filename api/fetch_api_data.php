@@ -25,7 +25,8 @@ try {
         case 'get_periods':
             // Authenticate first so we can give a clear error if credentials are wrong
             if (!$apiClient->authenticate()) {
-                throw new Exception('API authentication failed. Key: ' . substr(OOUTH_API_KEY, 0, 10) . '... — check .env credentials on server');
+                $authErr = $apiClient->getLastAuthError();
+                throw new Exception('API auth failed. API response: ' . json_encode($authErr));
             }
             $result = $apiClient->getPeriods(1, 1000);
             if ($result && isset($result['success']) && $result['success']) {

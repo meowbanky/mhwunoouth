@@ -10,10 +10,11 @@ class OOUTHSalaryAPIClient {
     private $baseUrl;
     private $apiKey;
     private $apiSecret;
-    private $jwtToken   = null;
+    private $jwtToken    = null;
     private $tokenExpiry = null;
     private $timeout;
     private $debug;
+    private $lastAuthError = null;
 
     public function __construct() {
         $this->baseUrl   = OOUTH_API_BASE_URL;
@@ -39,9 +40,10 @@ class OOUTHSalaryAPIClient {
                 $this->tokenExpiry = time() + ($response['data']['expires_in'] ?? 900);
                 return true;
             }
+            $this->lastAuthError = $response;
             return false;
         } catch (Exception $e) {
-            if ($this->debug) error_log('OOUTH API auth error: ' . $e->getMessage());
+            $this->lastAuthError = ['exception' => $e->getMessage()];
             return false;
         }
     }
@@ -80,6 +82,10 @@ class OOUTHSalaryAPIClient {
         $url = "/payroll/allowances/{$allowanceId}";
         if ($periodId !== null) $url .= "?period={$periodId}";
         return $this->request('GET', $url);
+    }
+
+    public function getLastAuthError() {
+        return $this->lastAuthError;
     }
 
     public function getResourceData($periodId = null) {
