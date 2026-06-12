@@ -26,7 +26,7 @@ try {
             // Authenticate first so we can give a clear error if credentials are wrong
             if (!$apiClient->authenticate()) {
                 $authErr = $apiClient->getLastAuthError();
-                throw new Exception('API auth failed. API response: ' . json_encode($authErr));
+                throw new Exception('API auth failed — key_len:' . strlen(OOUTH_API_KEY) . ' secret_len:' . strlen(OOUTH_API_SECRET) . ' response:' . json_encode($authErr));
             }
             $result = $apiClient->getPeriods(1, 1000);
             if ($result && isset($result['success']) && $result['success']) {
