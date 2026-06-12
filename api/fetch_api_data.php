@@ -11,9 +11,12 @@ if (!isset($_SESSION['UserID']) || trim($_SESSION['UserID']) == '') {
 
 header('Content-Type: application/json');
 
-require_once(__DIR__ . '/../classes/OOUTHSalaryAPIClient.php');
-
 try {
+    if (!file_exists(__DIR__ . '/../classes/OOUTHSalaryAPIClient.php')) {
+        throw new Exception('OOUTHSalaryAPIClient.php not found at: ' . __DIR__ . '/../classes/');
+    }
+    require_once(__DIR__ . '/../classes/OOUTHSalaryAPIClient.php');
+
     $action    = $_GET['action'] ?? '';
     $apiClient = new OOUTHSalaryAPIClient();
 
@@ -53,6 +56,9 @@ try {
             break;
 
         case 'get_local_periods':
+            if (!file_exists(__DIR__ . '/../Connections/hms.php')) {
+                throw new Exception('hms.php not found at: ' . __DIR__ . '/../Connections/');
+            }
             require_once(__DIR__ . '/../Connections/hms.php');
             $query  = "SELECT Periodid, PayrollPeriod, PhysicalYear, PhysicalMonth
                        FROM tbpayrollperiods ORDER BY Periodid DESC";

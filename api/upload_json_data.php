@@ -11,9 +11,11 @@ if (!isset($_SESSION['UserID']) || trim($_SESSION['UserID']) == '') {
 
 header('Content-Type: application/json');
 
-require_once(__DIR__ . '/../Connections/hms.php');
-
 try {
+    if (!file_exists(__DIR__ . '/../Connections/hms.php')) {
+        throw new Exception('hms.php not found at: ' . __DIR__ . '/../Connections/');
+    }
+    require_once(__DIR__ . '/../Connections/hms.php');
     $input   = file_get_contents('php://input');
     $request = json_decode($input, true);
 
