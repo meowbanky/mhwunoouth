@@ -23,11 +23,15 @@ try {
     switch ($action) {
 
         case 'get_periods':
+            // Authenticate first so we can give a clear error if credentials are wrong
+            if (!$apiClient->authenticate()) {
+                throw new Exception('API authentication failed. Key: ' . substr(OOUTH_API_KEY, 0, 10) . '... — check .env credentials on server');
+            }
             $result = $apiClient->getPeriods(1, 1000);
             if ($result && isset($result['success']) && $result['success']) {
                 echo json_encode(['success' => true, 'data' => $result['data']]);
             } else {
-                throw new Exception($result['error']['message'] ?? 'Failed to fetch periods from API');
+                throw new Exception($result['error']['message'] ?? $result['message'] ?? 'Failed to fetch periods from API');
             }
             break;
 

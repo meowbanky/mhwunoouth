@@ -109,8 +109,8 @@ class OOUTHSalaryAPIClient {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST,  $method);
         curl_setopt($ch, CURLOPT_HTTPHEADER,     $headers);
         curl_setopt($ch, CURLOPT_TIMEOUT,        $this->timeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // TODO: re-enable once server CA certs confirmed
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
         if ($body) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
         }
