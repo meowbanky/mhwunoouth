@@ -12,9 +12,7 @@ try {
     $stmt_stats = $conn->query("SELECT SUM(contribution) as total_savings FROM tbl_contributions");
     $stats = $stmt_stats->fetch(PDO::FETCH_ASSOC);
     $grand_total_savings = $stats['total_savings'] ?? 0;
-} catch (PDOException $e) {
-    // Ignore
-}
+} catch (PDOException $e) { }
 
 // Initial total count for display
 $total_active_members = 0;
@@ -33,8 +31,28 @@ function format_money($amount) {
 <main class="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
     <?php include 'includes/topbar.php'; ?>
     
-    <div class="flex-1 p-6 flex gap-6 overflow-hidden">
-        
+    <!-- Period Selector (always visible, full-width) -->
+    <div class="px-6 pt-6">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 flex flex-col sm:flex-row items-end gap-4">
+            <div class="flex-1">
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <span class="material-icons-round text-sm align-middle text-primary">calendar_month</span>
+                    Payroll Period
+                </label>
+                <select id="periodSelect"
+                    class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary text-sm outline-none">
+                    <option value="">Loading periods...</option>
+                </select>
+            </div>
+            <div class="bg-primary/5 dark:bg-slate-800 rounded-xl px-4 py-3 text-center min-w-[160px]">
+                <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">Total Savings (Global)</p>
+                <p class="text-xl font-bold text-primary">₦<?php echo format_money($grand_total_savings); ?></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 p-6 pt-4 flex gap-6 overflow-hidden">
+
         <!-- Inner Sidebar: Member Directory -->
         <aside id="memberSidebar" class="w-full lg:w-1/3 min-w-[320px] max-w-[400px] flex flex-col gap-4 h-full lg:flex">
             <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col h-full overflow-hidden">
@@ -83,14 +101,6 @@ function format_money($amount) {
                  </div>
             </div>
 
-            <!-- Top Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <p class="text-slate-500 dark:text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">Total Savings (Global)</p>
-                    <p class="text-2xl font-bold">₦<?php echo format_money($grand_total_savings); ?></p>
-                </div>
-            </div>
-
             <!-- Empty State (Default) -->
             <div id="emptyState" class="flex-1 flex flex-col items-center justify-center p-10 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-400">
                 <div class="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
@@ -105,14 +115,18 @@ function format_money($amount) {
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center flex-wrap gap-4">
                     <div>
                         <h2 class="text-xl font-bold">Edit Contribution</h2>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Modify records for <span id="memberNameDisplay" class="text-slate-900 dark:text-white font-semibold">...</span></p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            Modify records for <span id="memberNameDisplay" class="text-slate-900 dark:text-white font-semibold">...</span>
+                            &nbsp;·&nbsp; Period: <span id="periodNameDisplay" class="text-primary font-semibold">...</span>
+                        </p>
                     </div>
                     <span id="memberIdBadge" class="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs font-bold uppercase">ID: ...</span>
                 </div>
 
                 <form id="contributionForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-                    <input type="hidden" name="member_id" id="hiddenMemberId">
-                    <input type="hidden" name="action" value="update_record">
+                    <input type="hidden" name="member_id"  id="hiddenMemberId">
+                    <input type="hidden" name="period_id"  id="hiddenPeriodId">
+                    <input type="hidden" name="action"     value="update_record">
                     
                     <div class="space-y-6">
                         <!-- Contribution Input -->
@@ -133,9 +147,9 @@ function format_money($amount) {
                             <label class="block text-sm font-semibold mb-2">Loan Repayment (₦)</label>
                             <div class="relative">
                                 <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
-                                <input name="loan_repayment" id="loanInput" 
-                                       class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-primary text-lg font-bold transition-all" 
-                                       type="text" 
+                                <input name="loan_repayment" id="loanInput"
+                                       class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-primary text-lg font-bold transition-all"
+                                       type="text"
                                        oninput="formatInput(this); calculateTotal();"
                                 />
                             </div>
@@ -161,23 +175,53 @@ function format_money($amount) {
                     </div>
 
                     <!-- Side Info Panel -->
-                    <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 h-fit">
-                        <h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-2">
+                    <div class="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-100 dark:border-slate-800 h-fit space-y-4">
+                        <h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                             <span class="material-icons-round text-lg">info</span>
                             Financial Status
                         </h3>
-                        
-                        <div class="space-y-4">
-                             <div class="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-slate-700">
-                                <div>
-                                    <p class="text-sm font-bold opacity-50">Current Loan Balance</p>
-                                    <p class="text-2xl font-bold text-red-500" id="loanBalanceDisplay">₦0.00</p>
+
+                        <!-- Loan Balance -->
+                        <div class="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-slate-700">
+                            <div>
+                                <p class="text-sm font-bold opacity-50">Current Loan Balance</p>
+                                <p class="text-2xl font-bold text-red-500" id="loanBalanceDisplay">₦0.00</p>
+                            </div>
+                        </div>
+
+                        <!-- Salary Breakdown -->
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Salary Deduction Breakdown</p>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-500">Contribution</span>
+                                    <span id="breakdownContrib" class="font-semibold">₦0.00</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-500">Loan Repayment</span>
+                                    <span id="breakdownLoan" class="font-semibold">₦0.00</span>
+                                </div>
+                                <div class="flex justify-between text-orange-600 dark:text-orange-400" id="breakdownRefundRow">
+                                    <span class="flex items-center gap-1">
+                                        <span class="material-icons-round text-sm">undo</span> Refund
+                                    </span>
+                                    <span id="breakdownRefund" class="font-semibold">₦0.00</span>
+                                </div>
+                                <div class="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold">
+                                    <span>Total from Salary</span>
+                                    <span id="breakdownTotal" class="text-primary">₦0.00</span>
                                 </div>
                             </div>
-                            
-                            <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg">
-                                <span class="font-bold">Note:</span> Increasing the loan repayment amount here will reduce the loan balance faster during the next payroll cycle.
-                            </div>
+                        </div>
+
+                        <!-- Refund Records -->
+                        <div id="refundSection" class="hidden">
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Refund Records</p>
+                            <div id="refundList" class="space-y-2"></div>
+                        </div>
+
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg">
+                            <span class="font-bold">Note:</span> Increasing loan repayment reduces the loan balance faster during the next payroll cycle.
                         </div>
                     </div>
                 </form>
@@ -197,10 +241,31 @@ function format_money($amount) {
     let totalPages = 1;
     let currentSearch = "";
     let searchTimeout;
+    let selectedPeriodId = null;
+    let selectedPeriodName = '';
 
-    // First Load
     $(document).ready(function() {
+        loadPeriods();
         fetchDirectory(1);
+    });
+
+    function loadPeriods() {
+        $.post('contribution_api.php', { action: 'fetch_periods' }, function(res) {
+            const sel = $('#periodSelect');
+            sel.empty().append('<option value="">— Select Period —</option>');
+            if (res.status === 'success') {
+                res.data.forEach(p => {
+                    sel.append(`<option value="${p.Periodid}">${p.PayrollPeriod} (${p.PhysicalYear})</option>`);
+                });
+            }
+        }, 'json');
+    }
+
+    $('#periodSelect').on('change', function() {
+        selectedPeriodId   = $(this).val() || null;
+        selectedPeriodName = $(this).find('option:selected').text();
+        // Reset any open form when period changes
+        resetView();
     });
 
     // --- DIRECTORY/PAGINATION LOGIC ---
@@ -305,47 +370,46 @@ function format_money($amount) {
 
     // --- LOAD MEMBER DATA (AJAX) ---
     function loadMember(id) {
-        // Show loader
+        if (!selectedPeriodId) {
+            Swal.fire('Select Period', 'Please select a payroll period before editing a member.', 'warning');
+            return;
+        }
+
         $('#loader').fadeIn(100);
-        
-        // Mobile: Switch view
+
         if (window.innerWidth < 1024) {
             $('#memberSidebar').addClass('hidden');
             $('#mainContent').removeClass('hidden').addClass('flex');
         }
-        
-        // Highlight active sidebar item
+
         $('.member-item').removeClass('bg-primary/5 border-primary/20').addClass('border-transparent');
         $('.member-item').find('.material-icons-round:last').addClass('opacity-0');
-        
         $('#member-' + id).removeClass('border-transparent').addClass('bg-primary/5 border-primary/20');
         $('#member-' + id).find('.material-icons-round:last').removeClass('opacity-0');
 
         $.ajax({
             url: 'contribution_api.php',
             type: 'POST',
-            data: { action: 'fetch_member', id: id },
+            data: { action: 'fetch_member', id: id, period_id: selectedPeriodId },
             dataType: 'json',
             success: function(response) {
                 if (response.status === 'success') {
                     const data = response.data;
-                    
-                    // Populate Form
+
                     $('#memberNameDisplay').text(data.member.Lname + ' ' + data.member.Fname);
+                    $('#periodNameDisplay').text(selectedPeriodName);
                     $('#memberIdBadge').text('ID: ' + data.member.patientid);
                     $('#hiddenMemberId').val(data.member.patientid);
-                    
+                    $('#hiddenPeriodId').val(selectedPeriodId);
+
                     $('#contribInput').val(formatMoney(data.contribution.contribution));
                     $('#loanInput').val(formatMoney(data.contribution.loan));
                     $('#loanBalanceDisplay').text('₦' + formatMoney(data.loan_balance));
-                    
-                    calculateTotal();
 
-                    // Switch View
+                    renderRefunds(data.refunds || [], data.refund_total || 0);
+                    calculateTotal();
                     $('#emptyState').hide();
                     $('#editFormContainer').fadeIn(200);
-                    
-                    // Mobile sidebar toggle check could go here
                 } else {
                     Swal.fire('Error', response.message, 'error');
                 }
@@ -413,17 +477,83 @@ function format_money($amount) {
         $('#memberSidebar').removeClass('hidden').addClass('flex');
     }
 
+    let currentRefundTotal = 0;
+
+    function renderRefunds(refunds, total) {
+        currentRefundTotal = parseFloat(total) || 0;
+        $('#breakdownRefund').text('₦' + formatMoney(currentRefundTotal));
+
+        if (refunds.length === 0) {
+            $('#refundSection').addClass('hidden');
+            $('#refundList').empty();
+        } else {
+            $('#refundSection').removeClass('hidden');
+            const html = refunds.map(r => `
+                <div class="flex items-center justify-between bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-2" id="refund-${r.refundid}">
+                    <span class="text-sm font-semibold text-orange-700 dark:text-orange-300">₦${formatMoney(r.amount)}</span>
+                    <button onclick="deleteRefund(${r.refundid})"
+                        class="text-red-500 hover:text-red-700 transition-colors ml-3 flex items-center gap-1 text-xs font-medium">
+                        <span class="material-icons-round text-sm">delete</span> Delete
+                    </button>
+                </div>`).join('');
+            $('#refundList').html(html);
+        }
+        updateBreakdown();
+    }
+
+    function updateBreakdown() {
+        const contrib = parseFloat($('#contribInput').val().replace(/,/g, '') || 0);
+        const loan    = parseFloat($('#loanInput').val().replace(/,/g, '')    || 0);
+        const total   = contrib + loan + currentRefundTotal;
+        $('#breakdownContrib').text('₦' + formatMoney(contrib));
+        $('#breakdownLoan').text('₦'    + formatMoney(loan));
+        $('#breakdownTotal').text('₦'   + formatMoney(total));
+    }
+
+    async function deleteRefund(refundId) {
+        const confirm = await Swal.fire({
+            title: 'Delete Refund?',
+            text: 'This will permanently remove the refund record.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Delete',
+            confirmButtonColor: '#ef4444'
+        });
+        if (!confirm.isConfirmed) return;
+
+        $.post('contribution_api.php', { action: 'delete_refund', refund_id: refundId }, function(res) {
+            if (res.status === 'success') {
+                $('#refund-' + refundId).remove();
+                // Recheck if any refunds remain
+                if ($('#refundList').children().length === 0) {
+                    currentRefundTotal = 0;
+                    $('#refundSection').addClass('hidden');
+                    $('#breakdownRefundRow').addClass('hidden');
+                } else {
+                    // Recalculate total from remaining rows (reload member to be safe)
+                    loadMember($('#hiddenMemberId').val());
+                    return;
+                }
+                updateBreakdown();
+                Swal.fire({ icon: 'success', title: 'Deleted', timer: 1200, showConfirmButton: false });
+            } else {
+                Swal.fire('Error', res.message, 'error');
+            }
+        }, 'json');
+    }
+
     function calculateTotal() {
         const contribEl = document.getElementById('contribInput');
-        const loanEl = document.getElementById('loanInput');
+        const loanEl    = document.getElementById('loanInput');
         if (!contribEl || !loanEl) return;
 
         let contrib = parseFloat(contribEl.value.replace(/,/g, '') || 0);
-        let loan = parseFloat(loanEl.value.replace(/,/g, '') || 0);
-        let total = contrib + loan;
-        
+        let loan    = parseFloat(loanEl.value.replace(/,/g, '')    || 0);
+        let total   = contrib + loan;
+
         const totalEl = document.getElementById('visualTotal');
-        if(totalEl) totalEl.innerText = '₦' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (totalEl) totalEl.innerText = '₦' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        updateBreakdown();
     }
 </script>
 
