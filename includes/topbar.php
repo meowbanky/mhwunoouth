@@ -34,15 +34,15 @@ if (!function_exists('formatCurrency')) {
             <span class="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors">search</span>
             <input class="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none" placeholder="Search members, transactions, records..." type="text"/>
         </div>
-        <!-- Mobile Hamburger -->
-        <button id="mobile-menu-btn" class="md:hidden p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+        <!-- Hamburger: visible on all screens smaller than lg (sidebar breakpoint) -->
+        <button id="mobile-menu-btn" class="lg:hidden p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
             <span class="material-icons-round">menu</span>
         </button>
     </div>
-    
+
     <div class="flex items-center space-x-4">
-        <!-- Desktop Nav -->
-        <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
+        <!-- Quick nav shown on md-lg gap; hidden once sidebar is visible at lg -->
+        <nav class="hidden md:flex lg:hidden items-center gap-6 text-sm font-medium">
             <a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors" href="dashboard.php">Dashboard</a>
             <a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors" href="memberlist.php">Members</a>
             <a class="text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors" href="editContributions.php">Contributions</a>
