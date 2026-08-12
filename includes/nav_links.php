@@ -50,6 +50,7 @@ if (!function_exists('navGroups')) {
                     ['href' => 'transact_period.php', 'icon' => 'calendar_today',   'label' => 'Period'],
                     ['href' => 'process2.php',        'icon' => 'fact_check',       'label' => 'Process Transaction'],
                     ['href' => 'api_upload.php',      'icon' => 'cloud_upload',     'label' => 'API Upload'],
+                    ['href' => 'member_accounts.php', 'icon' => 'badge',            'label' => 'Portal Accounts'],
                     ['href' => 'registeruser.php',    'icon' => 'manage_accounts',  'label' => 'User Management', 'mobile_label' => 'User Settings', 'mobile_icon' => 'settings'],
                     ['href' => 'index.php?logout=true', 'icon' => 'logout',         'label' => 'Logout', 'active' => false],
                 ],
