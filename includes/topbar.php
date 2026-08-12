@@ -135,6 +135,9 @@ if (!function_exists('formatCurrency')) {
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('editContributions.php'); ?>" href="editContributions.php">
             <span class="material-icons-round text-xl">volunteer_activism</span> Contributions
         </a>
+        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bank_loan_report.php'); ?>" href="bank_loan_report.php">
+            <span class="material-icons-round text-xl">account_balance</span> Bank Loans
+        </a>
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('mastertransaction.php'); ?>" href="mastertransaction.php">
             <span class="material-icons-round text-xl">assessment</span> Reports
         </a>
@@ -162,10 +165,7 @@ if (!function_exists('formatCurrency')) {
         <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('registeruser.php'); ?>" href="registeruser.php">
             <span class="material-icons-round text-xl">settings</span> User Settings
         </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('backup2.php'); ?>" href="backup2.php">
-            <span class="material-icons-round text-xl">backup</span> Backup
-        </a>
-        <a class="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-3 text-slate-700 dark:text-slate-200" href="logout.php">
+        <a class="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-3 text-slate-700 dark:text-slate-200" href="index.php?logout=true">
             <span class="material-icons-round text-xl">logout</span> Logout
         </a>
     </nav>
