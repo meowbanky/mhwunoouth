@@ -176,12 +176,14 @@ portalHead('My Statement', true);
 
     function buildPeriodFilter() {
         const periods = REPORT.periods || [];
-        const opts = periods.map(p => `<option value="${p.periodid}">${$('<div>').text(p.label).html()}</option>`).join('');
+
+        // A dot marks periods this member actually has records in; the rest stay
+        // selectable so the range can always reach the current period.
+        const option = p => `<option value="${p.periodid}">${$('<div>').text(p.label).html()}${p.has_activity ? ' •' : ''}</option>`;
 
         // Periods arrive newest first; "From" reads more naturally oldest first.
-        $('#fromPeriod').html(periods.slice().reverse().map(p =>
-            `<option value="${p.periodid}">${$('<div>').text(p.label).html()}</option>`).join(''));
-        $('#toPeriod').html(opts);
+        $('#fromPeriod').html(periods.slice().reverse().map(option).join(''));
+        $('#toPeriod').html(periods.map(option).join(''));
 
         resetPeriods();
         $('#fromPeriod, #toPeriod').on('change', applyFilter);
@@ -189,7 +191,7 @@ portalHead('My Statement', true);
 
     function resetPeriods() {
         const periods = REPORT.periods || [];
-        if (!periods.length) { $('#filterNote').text('No activity recorded yet.'); return; }
+        if (!periods.length) { $('#filterNote').text('No payroll periods defined yet.'); return; }
         $('#fromPeriod').val(periods[periods.length - 1].periodid);
         $('#toPeriod').val(periods[0].periodid);
         applyFilter();
@@ -214,9 +216,17 @@ portalHead('My Statement', true);
                                  && Math.max(from, to) >= all[0].periodid;
 
         const shown = TABS.reduce((n, [, key]) => n + filtered(key).length, 0);
-        $('#filterNote').text(isAll
-            ? `Showing all ${all.length} period(s) · ${shown} record(s).`
-            : `Filtered to the selected range · ${shown} record(s). Exports use this range.`);
+        const withActivity = all.filter(p => p.has_activity).length;
+
+        let note = isAll
+            ? `Showing all ${all.length} payroll period(s) · ${shown} record(s).`
+            : `Filtered to the selected range · ${shown} record(s). Exports use this range.`;
+
+        if (shown === 0 && withActivity > 0) {
+            const latest = all.find(p => p.has_activity);
+            note += ` You have no records in this range — your most recent activity was ${latest.label}.`;
+        }
+        $('#filterNote').text(note + (withActivity > 0 ? ' Periods marked • contain your records.' : ''));
 
         renderTabCounts();
         showTab(activeTab);

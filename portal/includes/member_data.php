@@ -271,31 +271,39 @@ function periodLabel(array $row): string
 }
 
 /**
- * The distinct periods this member has any activity in, newest first.
+ * Every payroll period, newest first, for the statement's period filter.
  *
- * Drives the statement's period filter, so it spans both the ledger and the
- * deduction table rather than either alone.
+ * Deliberately not restricted to periods the member has activity in. Doing that
+ * made the list stop at their last transaction, so a member whose most recent
+ * entry was years ago could not select anything up to the current period, and
+ * the filter looked broken rather than empty.
+ *
+ * `has_activity` lets the UI mark the periods where there is something to see,
+ * without removing the others from the range.
  */
 function memberPeriods(PDO $conn, string $memberId): array
 {
-    $stmt = $conn->prepare(
-        "SELECT p.periodid, pp.PayrollPeriod, pp.PhysicalYear
-           FROM (
-                SELECT DISTINCT periodid  FROM tlb_mastertransaction WHERE memberid = :id
-                UNION
-                SELECT DISTINCT period_id FROM tbl_contributions     WHERE membersid = :id2 AND gross_deduction > 0
-           ) p
-           LEFT JOIN tbpayrollperiods pp ON pp.Periodid = p.periodid
-          WHERE p.periodid IS NOT NULL
-          ORDER BY p.periodid DESC"
+    $active = $conn->prepare(
+        "SELECT DISTINCT periodid  FROM tlb_mastertransaction WHERE memberid = :id
+         UNION
+         SELECT DISTINCT period_id FROM tbl_contributions     WHERE membersid = :id2 AND gross_deduction > 0"
     );
-    $stmt->execute([':id' => $memberId, ':id2' => $memberId]);
+    $active->execute([':id' => $memberId, ':id2' => $memberId]);
+    $withActivity = array_flip(array_map('intval', $active->fetchAll(PDO::FETCH_COLUMN)));
+
+    $stmt = $conn->query(
+        "SELECT Periodid AS periodid, PayrollPeriod, PhysicalYear
+           FROM tbpayrollperiods
+          ORDER BY Periodid DESC"
+    );
 
     $rows = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $id = (int)$row['periodid'];
         $rows[] = [
-            'periodid' => (int)$row['periodid'],
-            'label'    => periodLabel($row + ['period_id' => $row['periodid']]),
+            'periodid'     => $id,
+            'label'        => periodLabel($row + ['period_id' => $id]),
+            'has_activity' => isset($withActivity[$id]),
         ];
     }
 
