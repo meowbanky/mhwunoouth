@@ -306,6 +306,7 @@ try {
 
         case 'summary':
         case 'contributions':
+        case 'deductions':
         case 'transactions':
         case 'loans':
         case 'repayments':
@@ -318,6 +319,7 @@ try {
             $data = match ($action) {
                 'summary'       => memberSummary($conn, $memberId),
                 'contributions' => memberContributions($conn, $memberId),
+                'deductions'    => memberDeductions($conn, $memberId),
                 'transactions'  => memberTransactions($conn, $memberId),
                 'loans'         => memberLoans($conn, $memberId),
                 'repayments'    => memberRepayments($conn, $memberId),
@@ -337,7 +339,9 @@ try {
             jsonOk([
                 'profile'       => memberProfile($conn, $memberId),
                 'summary'       => memberSummary($conn, $memberId),
+                'periods'       => memberPeriods($conn, $memberId),
                 'contributions' => memberContributions($conn, $memberId),
+                'deductions'    => memberDeductions($conn, $memberId),
                 'loans'         => memberLoans($conn, $memberId),
                 'repayments'    => memberRepayments($conn, $memberId),
                 'bank_loans'    => memberBankLoans($conn, $memberId),

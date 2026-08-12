@@ -73,8 +73,38 @@ function memberSummary(PDO $conn, string $memberId): array
     ];
 }
 
-/** Contribution and deduction history, newest period first. */
+/**
+ * Contribution history — what was actually credited, period by period.
+ *
+ * This reads the ledger, not tbl_contributions. That table holds the *current*
+ * deduction instruction and only carries rows for periods that have been
+ * imported, so using it here showed a member years of savings in the headline
+ * total and an empty table underneath. See memberDeductions() for the split.
+ */
 function memberContributions(PDO $conn, string $memberId): array
+{
+    $stmt = $conn->prepare(
+        "SELECT m.periodid AS period_id,
+                pp.PayrollPeriod,
+                pp.PhysicalYear,
+                m.Contribution AS contribution
+           FROM tlb_mastertransaction m
+           LEFT JOIN tbpayrollperiods pp ON pp.Periodid = m.periodid
+          WHERE m.memberid = ? AND m.Contribution > 0
+          ORDER BY m.periodid DESC"
+    );
+    $stmt->execute([$memberId]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * How each payroll deduction was split.
+ *
+ * Only covers periods imported from payroll, so it is typically much shorter
+ * than the contribution history above.
+ */
+function memberDeductions(PDO $conn, string $memberId): array
 {
     $stmt = $conn->prepare(
         "SELECT c.period_id,
@@ -217,15 +247,57 @@ function memberWithdrawals(PDO $conn, string $memberId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/** Label a period for display, tolerating rows whose period was deleted. */
+/**
+ * Label a period for display.
+ *
+ * PayrollPeriod usually already carries the year ("June - 2018"), so appending
+ * PhysicalYear blindly produced "June - 2018 2018". Tolerates rows whose
+ * payroll period has since been deleted.
+ */
 function periodLabel(array $row): string
 {
-    $name = $row['PayrollPeriod'] ?? '';
-    $year = $row['PhysicalYear'] ?? '';
+    $name = trim((string)($row['PayrollPeriod'] ?? ''));
+    $year = trim((string)($row['PhysicalYear'] ?? ''));
 
     if ($name === '' && $year === '') {
         return 'Period ' . ($row['period_id'] ?? $row['periodid'] ?? '—');
     }
 
-    return trim($name . ' ' . $year);
+    if ($year !== '' && strpos($name, $year) === false) {
+        $name = trim($name . ' ' . $year);
+    }
+
+    return $name !== '' ? $name : $year;
+}
+
+/**
+ * The distinct periods this member has any activity in, newest first.
+ *
+ * Drives the statement's period filter, so it spans both the ledger and the
+ * deduction table rather than either alone.
+ */
+function memberPeriods(PDO $conn, string $memberId): array
+{
+    $stmt = $conn->prepare(
+        "SELECT p.periodid, pp.PayrollPeriod, pp.PhysicalYear
+           FROM (
+                SELECT DISTINCT periodid  FROM tlb_mastertransaction WHERE memberid = :id
+                UNION
+                SELECT DISTINCT period_id FROM tbl_contributions     WHERE membersid = :id2 AND gross_deduction > 0
+           ) p
+           LEFT JOIN tbpayrollperiods pp ON pp.Periodid = p.periodid
+          WHERE p.periodid IS NOT NULL
+          ORDER BY p.periodid DESC"
+    );
+    $stmt->execute([':id' => $memberId, ':id2' => $memberId]);
+
+    $rows = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rows[] = [
+            'periodid' => (int)$row['periodid'],
+            'label'    => periodLabel($row + ['period_id' => $row['periodid']]),
+        ];
+    }
+
+    return $rows;
 }
