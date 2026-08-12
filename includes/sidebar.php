@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/nav_links.php'; ?>
 <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 hidden lg:flex flex-col">
     <div class="p-6 flex items-center space-x-3">
         <div class="bg-white p-1 rounded-lg">
@@ -21,7 +22,7 @@
                      } elseif (file_exists('../NotificationService.php')) {
                          require_once('../NotificationService.php');
                      }
-                     
+
                      if (class_exists('class\services\NotificationService') && isset($conn)) {
                          $notificationService = new class\services\NotificationService($conn);
                          // Optional: Caching could be implemented here to reduce API calls
@@ -38,86 +39,26 @@
                     return '₦' . number_format($amount, 2);
                 }
             }
-
-            $currentPage = basename($_SERVER['PHP_SELF']);
-            
-            function isActive($page, $current) {
-                // Determine active state style
-                if ($page === $current) {
-                    return 'bg-primary/10 text-primary font-medium';
-                }
-                return 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all';
-            }
         ?>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('dashboard.php', $currentPage); ?>" href="dashboard.php">
-            <span class="material-icons-round">dashboard</span>
-            <span>Dashboard</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('memberlist.php', $currentPage); ?>" href="memberlist.php">
-            <span class="material-icons-round">group</span>
-            <span>Members</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('addloan.php', $currentPage); ?>" href="addloan.php">
-            <span class="material-icons-round">payments</span>
-            <span>Loans &amp; Finance</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('withdrawal.php', $currentPage); ?>" href="withdrawal.php">
-            <span class="material-icons-round">account_balance_wallet</span>
-            <span>Withdrawals</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bank_deposit.php', $currentPage); ?>" href="bank_deposit.php">
-            <span class="material-icons-round">account_balance</span>
-            <span>Bank Deposits</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('loanContri_Compare.php', $currentPage); ?>" href="loanContri_Compare.php">
-            <span class="material-icons-round">compare_arrows</span>
-            <span>Loan Comparison</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('editContributions.php', $currentPage); ?>" href="editContributions.php">
-            <span class="material-icons-round">volunteer_activism</span>
-            <span>Contributions</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bank_loan_report.php', $currentPage); ?>" href="bank_loan_report.php">
-            <span class="material-icons-round">account_balance</span>
-            <span>Bank Loans</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('mastertransaction.php', $currentPage); ?>" href="mastertransaction.php">
-            <span class="material-icons-round">assessment</span>
-            <span>Reports</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('status.php', $currentPage); ?>" href="status.php">
-            <span class="material-icons-round">analytics</span>
-            <span>Status</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bulksms.php', $currentPage); ?>" href="bulksms.php">
-            <span class="material-icons-round">sms</span>
-            <span>SMS Center</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('dnd_status_checker.php', $currentPage); ?>" href="dnd_status_checker.php">
-            <span class="material-icons-round">do_not_disturb_on</span>
-            <span>DND Checker</span>
-        </a>
-        <div class="pt-10 pb-4 text-xs font-semibold text-slate-400 px-4 uppercase tracking-wider">System</div>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('transact_period.php', $currentPage); ?>" href="transact_period.php">
-            <span class="material-icons-round">calendar_today</span>
-            <span>Period</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('process2.php', $currentPage); ?>" href="process2.php">
-            <span class="material-icons-round">fact_check</span>
-            <span>Process Transaction</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('api_upload.php', $currentPage); ?>" href="api_upload.php">
-            <span class="material-icons-round">cloud_upload</span>
-            <span>API Upload</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('registeruser.php', $currentPage); ?>" href="registeruser.php">
-            <span class="material-icons-round">manage_accounts</span>
-            <span>User Management</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" href="index.php?logout=true">
-            <span class="material-icons-round">logout</span>
-            <span>Logout</span>
-        </a>
+
+        <?php foreach (navGroups() as $group): ?>
+            <?php if (!empty($group['heading'])): ?>
+                <div class="pt-10 pb-4 text-xs font-semibold text-slate-400 px-4 uppercase tracking-wider">
+                    <?php echo htmlspecialchars($group['heading']); ?>
+                </div>
+            <?php endif; ?>
+
+            <?php foreach ($group['links'] as $link): ?>
+                <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php
+                    echo isNavActive($link)
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all';
+                ?>" href="<?php echo htmlspecialchars($link['href']); ?>">
+                    <span class="material-icons-round"><?php echo htmlspecialchars(navIcon($link)); ?></span>
+                    <span><?php echo htmlspecialchars(navLabel($link)); ?></span>
+                </a>
+            <?php endforeach; ?>
+        <?php endforeach; ?>
     </nav>
     <div class="p-6">
         <div class="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">

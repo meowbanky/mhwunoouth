@@ -1,4 +1,8 @@
 <?php
+// Nav is shared with sidebar.php. require_once here rather than relying on
+// sidebar.php being included first, so this file stands on its own.
+require_once __DIR__ . '/nav_links.php';
+
 // Ensure NotificationService is available if we need to fetch balance
 // Placed at top to ensure variable is available throughout the file
 if (!isset($smsBalance)) {
@@ -102,72 +106,24 @@ if (!function_exists('formatCurrency')) {
     </div>
 
     <nav class="flex flex-col gap-1 text-sm font-medium pb-8">
-        <?php
-        // Helper for mobile active state (inline to avoid conflicts)
-        if (!function_exists('isActiveMobile')) {
-            function isActiveMobile($page) {
-                $current = basename($_SERVER['PHP_SELF']);
-                if ($page === $current) {
-                    return 'bg-primary/10 text-primary font-bold';
-                }
-                return 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200';
-            }
-        }
-        ?>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('dashboard.php'); ?>" href="dashboard.php">
-            <span class="material-icons-round text-xl">dashboard</span> Dashboard
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('memberlist.php'); ?>" href="memberlist.php">
-            <span class="material-icons-round text-xl">group</span> Members
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('addloan.php'); ?>" href="addloan.php">
-            <span class="material-icons-round text-xl">payments</span> Loans
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('withdrawal.php'); ?>" href="withdrawal.php">
-            <span class="material-icons-round text-xl">account_balance_wallet</span> Withdrawals
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bank_deposit.php'); ?>" href="bank_deposit.php">
-            <span class="material-icons-round text-xl">account_balance</span> Bank Deposits
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('loanContri_Compare.php'); ?>" href="loanContri_Compare.php">
-            <span class="material-icons-round text-xl">compare_arrows</span> Loan Comparison
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('editContributions.php'); ?>" href="editContributions.php">
-            <span class="material-icons-round text-xl">volunteer_activism</span> Contributions
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bank_loan_report.php'); ?>" href="bank_loan_report.php">
-            <span class="material-icons-round text-xl">account_balance</span> Bank Loans
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('mastertransaction.php'); ?>" href="mastertransaction.php">
-            <span class="material-icons-round text-xl">assessment</span> Reports
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('status.php'); ?>" href="status.php">
-            <span class="material-icons-round text-xl">analytics</span> Status
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('bulksms.php'); ?>" href="bulksms.php">
-            <span class="material-icons-round text-xl">sms</span> SMS Center
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('dnd_status_checker.php'); ?>" href="dnd_status_checker.php">
-            <span class="material-icons-round text-xl">do_not_disturb_on</span> DND Checker
-        </a>
+        <?php foreach (navGroups() as $group): ?>
+            <?php if (!empty($group['heading'])): ?>
+                <div class="px-3 pt-4 pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <?php echo htmlspecialchars($group['heading']); ?>
+                </div>
+            <?php endif; ?>
 
-        <div class="px-3 pt-4 pb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">System</div>
-        
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('transact_period.php'); ?>" href="transact_period.php">
-            <span class="material-icons-round text-xl">calendar_today</span> Period
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('process2.php'); ?>" href="process2.php">
-            <span class="material-icons-round text-xl">fact_check</span> Process Transaction
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('api_upload.php'); ?>" href="api_upload.php">
-            <span class="material-icons-round text-xl">cloud_upload</span> API Upload
-        </a>
-        <a class="p-3 rounded-xl flex items-center gap-3 <?php echo isActiveMobile('registeruser.php'); ?>" href="registeruser.php">
-            <span class="material-icons-round text-xl">settings</span> User Settings
-        </a>
-        <a class="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-3 text-slate-700 dark:text-slate-200" href="index.php?logout=true">
-            <span class="material-icons-round text-xl">logout</span> Logout
-        </a>
+            <?php foreach ($group['links'] as $link): ?>
+                <a class="p-3 rounded-xl flex items-center gap-3 <?php
+                    echo isNavActive($link)
+                        ? 'bg-primary/10 text-primary font-bold'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200';
+                ?>" href="<?php echo htmlspecialchars($link['href']); ?>">
+                    <span class="material-icons-round text-xl"><?php echo htmlspecialchars(navIcon($link, true)); ?></span>
+                    <?php echo htmlspecialchars(navLabel($link, true)); ?>
+                </a>
+            <?php endforeach; ?>
+        <?php endforeach; ?>
     </nav>
 </div>
 
