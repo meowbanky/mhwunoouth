@@ -38,20 +38,74 @@ function currentMemberName(): string
     return (string)($_SESSION['member_name'] ?? '');
 }
 
-/** Redirect to the login page unless signed in. For page requests. */
+/**
+ * Why this session may no longer be used, or null if it is still good.
+ *
+ * Status is re-read on every request rather than trusted from login. Checking
+ * only at sign-in meant suspending an account, or a member leaving the union,
+ * had no effect until their session happened to expire — they carried on
+ * reading their statement in the meantime.
+ *
+ * Comparisons are case-insensitive: MySQL's default collation treats
+ * Status = 'Active' as matching 'active', so a strict PHP comparison would
+ * reject members the admin screens show as perfectly active.
+ */
+function sessionRevocationReason(PDO $conn, string $memberId): ?string
+{
+    $stmt = $conn->prepare(
+        "SELECT a.status, p.Status AS member_status
+           FROM tbl_member_auth a
+           INNER JOIN tbl_personalinfo p ON p.patientid = a.membersid
+          WHERE a.membersid = ?"
+    );
+    $stmt->execute([$memberId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        return 'Your portal account is no longer available. Please contact the union office.';
+    }
+
+    if (strcasecmp((string)$row['status'], 'active') !== 0) {
+        return 'This account has been suspended. Please contact the union office.';
+    }
+
+    if (strcasecmp((string)$row['member_status'], 'Active') !== 0) {
+        return 'Your membership is not active. Please contact the union office.';
+    }
+
+    return null;
+}
+
+/** Redirect to the login page unless signed in and still permitted. */
 function requireMemberPage(): void
 {
+    global $conn;
+
     if (!isMemberLoggedIn()) {
         header('Location: index.php');
         exit;
     }
+
+    if (sessionRevocationReason($conn, currentMemberId()) !== null) {
+        logoutMember();
+        header('Location: index.php?revoked=1');
+        exit;
+    }
 }
 
-/** Return 401 JSON unless signed in. For API requests. */
+/** Return 401 JSON unless signed in and still permitted. */
 function requireMemberApi(): void
 {
+    global $conn;
+
     if (!isMemberLoggedIn()) {
         jsonFail('Your session has expired. Please sign in again.', 401);
+    }
+
+    $reason = sessionRevocationReason($conn, currentMemberId());
+    if ($reason !== null) {
+        logoutMember();
+        jsonFail($reason, 403);
     }
 }
 

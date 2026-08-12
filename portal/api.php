@@ -225,11 +225,12 @@ try {
                 jsonFail('This account is temporarily locked after repeated failed attempts. Please try again shortly.', 423);
             }
 
-            if ($auth['status'] !== 'active') {
+            // Case-insensitive, to match how MySQL compares these same values.
+            if (strcasecmp((string)$auth['status'], 'active') !== 0) {
                 jsonFail('This account has been suspended. Please contact the union office.', 403);
             }
 
-            if (($auth['member_status'] ?? '') !== 'Active') {
+            if (strcasecmp((string)($auth['member_status'] ?? ''), 'Active') !== 0) {
                 jsonFail('Your membership is not active. Please contact the union office.', 403);
             }
 

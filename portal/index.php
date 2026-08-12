@@ -15,6 +15,16 @@ portalHead('Sign in');
 authShellOpen('Sign in', 'Use the email address you registered with.');
 ?>
 
+<?php if (isset($_GET['revoked'])): ?>
+    <div class="mb-5 p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex gap-2.5">
+        <span class="material-icons-round text-amber-500 text-xl flex-shrink-0">info</span>
+        <p class="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+            You have been signed out because your account is no longer active.
+            Please contact the union office if you think this is a mistake.
+        </p>
+    </div>
+<?php endif; ?>
+
 <form id="loginForm" class="space-y-4">
     <div>
         <label class="block text-sm font-semibold mb-1.5" for="email">Email address</label>
