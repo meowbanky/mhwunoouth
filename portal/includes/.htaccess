@@ -1,0 +1,12 @@
+# These files are includes, never entry points. Fetching one directly leaks no
+# output, but it still opens a session and a database connection, so refuse the
+# request outright.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
