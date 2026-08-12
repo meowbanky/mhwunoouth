@@ -101,13 +101,14 @@ try {
             $sigStr  = $key . $ts;
             $decoded = hex2bin($secret);
 
+            $sha256Secret = hash('sha256', $secret); // DB stores sha256(rawSecret) as HMAC key
             $variants = [
+                'sha256_secret_key' => hash_hmac('sha256', $sigStr, $sha256Secret),  // ← correct
                 'hex_raw_secret'    => hash_hmac('sha256', $sigStr, $secret),
                 'hex_decoded_secret'=> hash_hmac('sha256', $sigStr, $decoded),
                 'b64_raw_secret'    => base64_encode(hash_hmac('sha256', $sigStr, $secret,  true)),
                 'b64_decoded_secret'=> base64_encode(hash_hmac('sha256', $sigStr, $decoded, true)),
                 'ts_only_hex'       => hash_hmac('sha256', (string)$ts, $secret),
-                'ts_only_hex_dec'   => hash_hmac('sha256', (string)$ts, $decoded),
             ];
 
             $results = [];

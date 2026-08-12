@@ -10,3 +10,6 @@ backup.bat
 tobedeleted/
 image_upload/
 upload.xlsx
+
+# Reference bundle with hardcoded API credentials in config/api_config.php
+api_upload_bundle/

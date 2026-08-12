@@ -24,23 +24,22 @@ try {
         }
 
         // ---------------------------------------------------------------------
-        // Action: Fetch Members to Process
+        // Action: Fetch Members to Process (filtered by period)
         // ---------------------------------------------------------------------
         if ($action === 'fetch_members_to_process') {
-            // Get list of active members to process
-            // Logic ported from process.php: SELECT ... FROM tbl_contributions INNER JOIN tbl_personalinfo ... WHERE `Status` = 'Active' order by tbl_personalinfo.ordered_id asc
-            $query = "SELECT tbl_personalinfo.patientid 
-                      FROM tbl_contributions 
-                      INNER JOIN tbl_personalinfo ON tbl_personalinfo.patientid = tbl_contributions.membersid 
-                      WHERE `Status` = 'Active' 
-                      ORDER BY tbl_personalinfo.ordered_id ASC";
-            
-            $stmt = $conn->query($query);
-            $members = $stmt->fetchAll(PDO::FETCH_COLUMN); // Returns array of IDs
+            $stmt = $conn->prepare(
+                "SELECT tbl_personalinfo.patientid
+                 FROM tbl_contributions
+                 INNER JOIN tbl_personalinfo ON tbl_personalinfo.patientid = tbl_contributions.membersid
+                 WHERE tbl_personalinfo.Status = 'Active' AND tbl_contributions.period_id = ?
+                 ORDER BY tbl_personalinfo.ordered_id ASC"
+            );
+            $stmt->execute([$periodId]);
+            $members = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
             $response['status'] = 'success';
-            $response['data'] = $members;
-            $response['count'] = count($members);
+            $response['data']   = $members;
+            $response['count']  = count($members);
         }
 
         // ---------------------------------------------------------------------
@@ -50,15 +49,16 @@ try {
             $memberId = $_POST['member_id'] ?? '';
             if (empty($memberId)) throw new Exception("Member ID is required.");
 
-            // 1. Fetch Standing Order (Contribution & Loan Deduction Amount)
-            // Using logic from process.php: $query_deductions
-            $deductionSql = "SELECT contribution, loan FROM tbl_contributions WHERE membersid = ?";
-            $deductionStmt = $conn->prepare($deductionSql);
-            $deductionStmt->execute([$memberId]);
+            // 1. Fetch contribution/loan for this member + period
+            $deductionStmt = $conn->prepare(
+                "SELECT contribution, loan FROM tbl_contributions
+                 WHERE membersid = ? AND period_id = ?"
+            );
+            $deductionStmt->execute([$memberId, $periodId]);
             $deduction = $deductionStmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$deduction) {
-                throw new Exception("No deduction record found for member $memberId");
+                throw new Exception("No contribution record for member $memberId in period $periodId");
             }
             
             $monthlyContribution = floatval($deduction['contribution']);

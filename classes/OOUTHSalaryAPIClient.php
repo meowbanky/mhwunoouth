@@ -28,9 +28,9 @@ class OOUTHSalaryAPIClient {
         try {
             $timestamp       = time();
             $signatureString = $this->apiKey . $timestamp;
-            // Secret is a 64-char hex string; decode to raw bytes before HMAC
-            $secretBytes = ctype_xdigit($this->apiSecret) ? hex2bin($this->apiSecret) : $this->apiSecret;
-            $signature   = hash_hmac('sha256', $signatureString, $secretBytes);
+            // API stores sha256(rawSecret) in DB and uses that as the HMAC key
+            $hmacKey   = hash('sha256', $this->apiSecret);
+            $signature = hash_hmac('sha256', $signatureString, $hmacKey);
 
             $response = $this->request('POST', '/auth/token', null, [
                 'X-Timestamp' => $timestamp,
