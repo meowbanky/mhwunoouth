@@ -84,10 +84,12 @@ authShellOpen('Create your account', 'Four quick steps. You will need your paysl
     </div>
 
     <div id="codeStage" class="hidden">
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
             We sent a <?php echo OTP_LENGTH; ?>-digit code to <span id="maskedEmail" class="font-semibold text-slate-900 dark:text-white"></span>.
             It expires in <?php echo OTP_TTL_MINUTES; ?> minutes.
         </p>
+
+        <?php include __DIR__ . '/includes/spam_notice.php'; ?>
         <input id="otpCode" type="text" inputmode="numeric" maxlength="<?php echo OTP_LENGTH; ?>" autocomplete="one-time-code"
                class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary outline-none text-center text-2xl font-bold tracking-[0.5em]"
                placeholder="------">

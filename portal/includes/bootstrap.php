@@ -44,6 +44,33 @@ function e(?string $value): string
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+/**
+ * Read a setting from .env, falling back to a default.
+ *
+ * Lives here rather than in mailer.php so pages that only need to *name* the
+ * sender do not have to pull in PHPMailer to do it.
+ */
+function portalConfig(string $key, string $default = ''): string
+{
+    static $env = null;
+
+    if ($env === null) {
+        $env  = [];
+        $path = __DIR__ . '/../../.env';
+        if (is_readable($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if (strpos(trim($line), '#') === 0 || strpos($line, '=') === false) {
+                    continue;
+                }
+                [$name, $value] = explode('=', $line, 2);
+                $env[trim($name)] = trim($value, " \t\"'");
+            }
+        }
+    }
+
+    return $env[$key] ?? $default;
+}
+
 /** Format a naira amount for display. */
 function naira($amount): string
 {

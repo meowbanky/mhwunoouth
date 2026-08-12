@@ -33,7 +33,9 @@ authShellOpen('Reset your password', 'We will email a code to your registered ad
 </section>
 
 <section class="stage hidden" data-stage="2">
-    <p class="text-sm text-slate-600 dark:text-slate-400 mb-4" id="sentNote"></p>
+    <p class="text-sm text-slate-600 dark:text-slate-400 mb-3" id="sentNote"></p>
+
+    <?php include __DIR__ . '/includes/spam_notice.php'; ?>
     <input id="otpCode" type="text" inputmode="numeric" maxlength="<?php echo OTP_LENGTH; ?>" autocomplete="one-time-code"
            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary outline-none text-center text-2xl font-bold tracking-[0.5em]"
            placeholder="------">

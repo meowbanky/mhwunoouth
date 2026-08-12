@@ -22,28 +22,6 @@ require_once __DIR__ . '/../lib/PHPMailer/SMTP.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
-/** Read a portal setting from .env, falling back to a default. */
-function portalConfig(string $key, string $default = ''): string
-{
-    static $env = null;
-
-    if ($env === null) {
-        $env  = [];
-        $path = __DIR__ . '/../../.env';
-        if (is_readable($path)) {
-            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
-                if (strpos(trim($line), '#') === 0 || strpos($line, '=') === false) {
-                    continue;
-                }
-                [$name, $value] = explode('=', $line, 2);
-                $env[trim($name)] = trim($value, " \t\"'");
-            }
-        }
-    }
-
-    return $env[$key] ?? $default;
-}
-
 /**
  * Send the one-time code.
  *
