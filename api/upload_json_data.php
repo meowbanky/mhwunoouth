@@ -16,6 +16,8 @@ try {
         throw new Exception('hms.php not found at: ' . __DIR__ . '/../Connections/');
     }
     require_once(__DIR__ . '/../Connections/hms.php');
+    require_once(__DIR__ . '/../logic/deduction_split.php');
+
     $input   = file_get_contents('php://input');
     $request = json_decode($input, true);
 
@@ -25,31 +27,50 @@ try {
         throw new Exception('Missing required fields: local_period and data');
     }
 
-    $localPeriodId   = (int)$request['local_period'];
-    $data            = $request['data'];
+    $localPeriodId = (int)$request['local_period'];
+    $data          = $request['data'];
 
-    if (empty($data))           throw new Exception('No data to upload');
-    if ($localPeriodId <= 0)    throw new Exception('Invalid local period ID');
+    if (empty($data))        throw new Exception('No data to upload');
+    if ($localPeriodId <= 0) throw new Exception('Invalid local period ID');
 
-    // Read fixed monthly contribution from settings
+    // Global fallback from settings
+    $globalDefault = 0;
     $settingResult = mysqli_query($hms, "SELECT contribution FROM tbl_settings LIMIT 1");
-    if (!$settingResult || mysqli_num_rows($settingResult) == 0) {
-        throw new Exception('Failed to load default contribution from settings');
+    if ($settingResult && mysqli_num_rows($settingResult) > 0) {
+        $globalDefault = floatval(mysqli_fetch_assoc($settingResult)['contribution']);
     }
-    $defaultContribution = floatval(mysqli_fetch_assoc($settingResult)['contribution']);
+
+    // Per-member defaults (constant, no period filter); falls back to globalDefault if not set
+    $defaultMap = [];
+    $dcResult = mysqli_query($hms, "SELECT membersid, contribution FROM tbl_default_contributions");
+    while ($dcRow = mysqli_fetch_assoc($dcResult)) {
+        $defaultMap[(int)$dcRow['membersid']] = floatval($dcRow['contribution']);
+    }
+
+    // Standing bank loan deductions (constant, no period filter). These are debts
+    // the union does not track; the money rides in on the same payroll deduction
+    // and must be set aside before the remainder is treated as loan repayment.
+    $bankLoanMap = [];
+    $blResult = mysqli_query($hms, "SELECT membersid, amount FROM tbl_bank_loans WHERE amount > 0");
+    if ($blResult) {
+        while ($blRow = mysqli_fetch_assoc($blResult)) {
+            $bankLoanMap[(int)$blRow['membersid']] = floatval($blRow['amount']);
+        }
+    }
 
     mysqli_begin_transaction($hms);
 
-    $successCount      = 0;
-    $errorCount        = 0;
-    $notFound          = [];
-    $processedIds      = []; // patientid values successfully processed
-    $errors            = [];
+    $successCount = 0;
+    $errorCount   = 0;
+    $notFound     = [];
+    $processedIds = [];
+    $errors       = [];
+    $shortfalls   = [];
+    $bankLoanTotal = 0.0;
 
     foreach ($data as $record) {
-        // patientid is INT in this project
-        $staffId = (int)$record['staff_id'];
-        $amount  = floatval($record['amount']);
+        $staffId = (int)($record['staff_id'] ?? 0);
+        $amount  = floatval($record['amount'] ?? 0);
 
         if ($staffId <= 0) continue;
 
@@ -70,31 +91,40 @@ try {
             continue;
         }
 
-        // Outstanding loan balance from master transaction
-        $stmtLoan = mysqli_prepare($hms,
-            "SELECT (SUM(IFNULL(loanAmount,0)) + SUM(IFNULL(interest,0))) - SUM(IFNULL(loanRepayment,0)) AS balance
-             FROM tlb_mastertransaction WHERE memberid = ?");
-        mysqli_stmt_bind_param($stmtLoan, 'i', $staffId);
-        mysqli_stmt_execute($stmtLoan);
-        $loanRow    = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtLoan));
-        $loanStatus = floatval($loanRow['balance'] ?? 0);
-        mysqli_stmt_close($stmtLoan);
+        // Member's contribution: individual default if set, otherwise global setting
+        $memberDefault = $defaultMap[$staffId] ?? $globalDefault;
+        $memberBankLoan = $bankLoanMap[$staffId] ?? 0.0;
 
-        // Split: contribution / loan repayment / special savings
-        $contribution   = $defaultContribution;
-        $loanRepayment  = 0;
-        $specialSavings = 0;
+        // Split: contribution first, then the untracked bank loan, and only what
+        // remains is repayment against the union's own loan.
+        $split         = splitSalaryDeduction($amount, $memberDefault, $memberBankLoan);
+        $contribution  = $split['contribution'];
+        $loanRepayment = $split['loan'];
+        $bankLoan      = $split['bank_loan'];
+        $grossAmount   = $split['gross'];
 
-        if ($amount >= $defaultContribution && $loanStatus > 0) {
-            $loanRepayment = $amount - $defaultContribution;
-        } elseif ($amount >= $defaultContribution) {
-            $specialSavings = $amount - $defaultContribution;
+        $bankLoanTotal += $bankLoan;
+
+        // Payroll sent less than the member's contribution plus their standing
+        // bank loan. We import what actually arrived rather than crediting money
+        // that was never deducted, and flag the row so the admin can act on it.
+        if ($split['shortfall'] > 0) {
+            $shortfalls[] = [
+                'staff_id'         => $staffId,
+                'name'             => $record['name'] ?? 'Unknown',
+                'gross'            => $grossAmount,
+                'expected_total'   => round($memberDefault + $memberBankLoan, 2),
+                'expected_contrib' => $memberDefault,
+                'applied_contrib'  => $contribution,
+                'expected_bank'    => $memberBankLoan,
+                'applied_bank'     => $bankLoan,
+                'shortfall'        => $split['shortfall'],
+            ];
         }
-        // else: amount < default → all zeros for loan/special
 
         $processedIds[] = $staffId;
 
-        // Check if a record already exists for this (membersid, period_id)
+        // Upsert into tbl_contributions
         $stmtCheck = mysqli_prepare($hms,
             "SELECT COUNT(*) AS cnt FROM tbl_contributions WHERE membersid = ? AND period_id = ?");
         mysqli_stmt_bind_param($stmtCheck, 'ii', $staffId, $localPeriodId);
@@ -105,15 +135,14 @@ try {
 
         if ($cnt > 0) {
             $stmt = mysqli_prepare($hms,
-                "UPDATE tbl_contributions
-                 SET contribution = ?, loan = ?, special_savings = ?
+                "UPDATE tbl_contributions SET contribution = ?, loan = ?, bank_loan = ?, gross_deduction = ?
                  WHERE membersid = ? AND period_id = ?");
-            mysqli_stmt_bind_param($stmt, 'dddii', $contribution, $loanRepayment, $specialSavings, $staffId, $localPeriodId);
+            mysqli_stmt_bind_param($stmt, 'ddddii', $contribution, $loanRepayment, $bankLoan, $grossAmount, $staffId, $localPeriodId);
         } else {
             $stmt = mysqli_prepare($hms,
-                "INSERT INTO tbl_contributions (contribution, loan, special_savings, membersid, period_id)
-                 VALUES (?, ?, ?, ?, ?)");
-            mysqli_stmt_bind_param($stmt, 'dddii', $contribution, $loanRepayment, $specialSavings, $staffId, $localPeriodId);
+                "INSERT INTO tbl_contributions (contribution, loan, bank_loan, gross_deduction, membersid, period_id)
+                 VALUES (?, ?, ?, ?, ?, ?)");
+            mysqli_stmt_bind_param($stmt, 'ddddii', $contribution, $loanRepayment, $bankLoan, $grossAmount, $staffId, $localPeriodId);
         }
 
         if (mysqli_stmt_execute($stmt)) {
@@ -125,42 +154,43 @@ try {
         mysqli_stmt_close($stmt);
     }
 
-    // Zero out contributions for this period for any active staff NOT in the uploaded list
+    // Zero out contributions for this period for any member NOT in the uploaded
+    // list. bank_loan and gross_deduction must be zeroed too: a member absent
+    // from the payroll file had nothing deducted, so leaving a stale bank loan
+    // behind would both overstate the bank's collection and break the period's
+    // reconciliation.
     if (!empty($processedIds)) {
-        $idList = implode(',', $processedIds);
+        $idList   = implode(',', $processedIds);
         $stmtZero = mysqli_prepare($hms,
-            "UPDATE tbl_contributions
-             SET contribution = 0, loan = 0, special_savings = 0
-             WHERE period_id = ? AND membersid IN (
-                 SELECT patientid FROM tbl_personalinfo WHERE patientid NOT IN ({$idList})
-             )");
+            "UPDATE tbl_contributions SET contribution = 0, loan = 0, bank_loan = 0, gross_deduction = 0
+             WHERE period_id = ? AND membersid NOT IN ($idList)");
         mysqli_stmt_bind_param($stmtZero, 'i', $localPeriodId);
         mysqli_stmt_execute($stmtZero);
         mysqli_stmt_close($stmtZero);
     }
 
-    // Commit if success rate is acceptable (> 50%)
     if ($successCount > 0 && $errorCount < ($successCount / 2)) {
         mysqli_commit($hms);
 
-        $notFoundDetails = [];
-        $notFoundList    = [];
-        foreach ($notFound as $s) {
-            $notFoundList[]    = "{$s['staff_id']} ({$s['name']}) - ₦" . number_format($s['amount'], 2);
-            $notFoundDetails[] = $s;
+        $details = "{$successCount} succeeded, {$errorCount} failed";
+        if ($bankLoanTotal > 0) {
+            $details .= '. Bank loan set aside: ₦' . number_format($bankLoanTotal, 2);
         }
 
         echo json_encode([
             'success' => true,
             'message' => "Upload completed: {$successCount} records processed successfully",
-            'details' => "{$successCount} succeeded, {$errorCount} failed",
+            'details' => $details,
             'data'    => [
-                'total'           => count($data),
-                'success'         => $successCount,
-                'errors'          => $errorCount,
-                'not_found_count' => count($notFound),
-                'not_found_list'  => $notFoundDetails,
-                'error_messages'  => $errors,
+                'total'            => count($data),
+                'success'          => $successCount,
+                'errors'           => $errorCount,
+                'not_found_count'  => count($notFound),
+                'not_found_list'   => $notFound,
+                'error_messages'   => $errors,
+                'bank_loan_total'  => round($bankLoanTotal, 2),
+                'shortfall_count'  => count($shortfalls),
+                'shortfall_list'   => $shortfalls,
             ],
         ]);
     } else {

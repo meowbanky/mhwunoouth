@@ -93,8 +93,13 @@ require_once('Connections/hms.php');
         <div class="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm flex flex-col">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                 <h3 class="font-bold text-slate-800 dark:text-slate-200">Current Member Deductions</h3>
-                <div class="text-sm font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 rounded-full">
-                    Grand Total: ₦<span id="grandTotalDisplay">0.00</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div id="bankLoanTotalBadge" class="hidden text-sm font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-3 py-1 rounded-full" title="Set aside for untracked bank loans — not processed by the loan engine">
+                        Bank Loan: ₦<span id="bankLoanTotalDisplay">0.00</span>
+                    </div>
+                    <div class="text-sm font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-3 py-1 rounded-full" title="Contribution + union loan repayment — what this run will process">
+                        To Process: ₦<span id="grandTotalDisplay">0.00</span>
+                    </div>
                 </div>
             </div>
             
@@ -106,11 +111,13 @@ require_once('Connections/hms.php');
                             <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Name</th>
                             <th class="px-6 py-4 text-xs font-bold text-right text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contribution (₦)</th>
                             <th class="px-6 py-4 text-xs font-bold text-right text-slate-500 dark:text-slate-400 uppercase tracking-wider">Loan Repayment (₦)</th>
-                            <th class="px-6 py-4 text-xs font-bold text-right text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total (₦)</th>
+                            <th class="px-6 py-4 text-xs font-bold text-right text-slate-500 dark:text-slate-400 uppercase tracking-wider">To Process (₦)</th>
+                            <th class="px-6 py-4 text-xs font-bold text-right text-purple-500 dark:text-purple-400 uppercase tracking-wider">Bank Loan (₦)</th>
+                            <th class="px-6 py-4 text-xs font-bold text-right text-slate-500 dark:text-slate-400 uppercase tracking-wider">Gross (₦)</th>
                         </tr>
                     </thead>
                     <tbody id="deductionsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
-                         <tr><td colspan="5" class="p-6 text-center">Loading...</td></tr>
+                         <tr><td colspan="7" class="p-6 text-center">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -284,14 +291,21 @@ require_once('Connections/hms.php');
         }
     });
 
+    // Reload deductions table when period changes
+    $('#PeriodSelect').on('change', function() {
+        loadDeductions(1);
+    });
+
     function loadDeductions(page) {
-        $.post('process2_api.php', { action: 'fetch_deductions', page: page, limit: 20 }, function(res) {
+        const periodId = $('#PeriodSelect').val();
+        $.post('process2_api.php', { action: 'fetch_deductions', page: page, limit: 20, period_id: periodId || 0 }, function(res) {
             if (res.status === 'success') {
                 renderTable(res.data.list);
                 $('#grandTotalDisplay').text(res.data.grand_total);
-                
+                $('#bankLoanTotalDisplay').text(res.data.bank_loan_total || '0.00');
+                $('#bankLoanTotalBadge').toggleClass('hidden', !res.data.has_bank_loans);
                 currentPage = res.data.pagination.current_page;
-                totalPages = res.data.pagination.total_pages;
+                totalPages  = res.data.pagination.total_pages;
                 updatePagination();
             }
         }, 'json');
@@ -302,11 +316,17 @@ require_once('Connections/hms.php');
         tbody.empty();
         
         if (rows.length === 0) {
-            tbody.html('<tr><td colspan="5" class="p-6 text-center text-slate-500">No records found.</td></tr>');
+            tbody.html('<tr><td colspan="7" class="p-6 text-center text-slate-500">No records found.</td></tr>');
             return;
         }
 
         rows.forEach(row => {
+            // Bank loan money is shown but greyed out when absent, so the
+            // members carrying one stand out at a glance.
+            const bankCell = row.has_bank_loan
+                ? `<td class="px-6 py-4 text-right font-mono font-semibold text-purple-600 dark:text-purple-400">${row.bank_loan_fmt}</td>`
+                : `<td class="px-6 py-4 text-right font-mono text-slate-300 dark:text-slate-600">—</td>`;
+
             const tr = `
                 <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td class="px-6 py-4 font-mono text-sm">${row.patientid}</td>
@@ -314,6 +334,8 @@ require_once('Connections/hms.php');
                     <td class="px-6 py-4 text-right text-slate-600 dark:text-slate-300 font-mono">${row.contribution_fmt}</td>
                     <td class="px-6 py-4 text-right text-slate-600 dark:text-slate-300 font-mono">${row.loan_fmt}</td>
                     <td class="px-6 py-4 text-right font-bold text-slate-800 dark:text-white font-mono">${row.total_fmt}</td>
+                    ${bankCell}
+                    <td class="px-6 py-4 text-right text-slate-500 dark:text-slate-400 font-mono">${row.gross_fmt}</td>
                 </tr>
             `;
             tbody.append(tr);

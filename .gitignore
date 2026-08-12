@@ -2,6 +2,7 @@
 .env
 .DS_Store
 .vscode/
+.claude/
 node_modules/
 vendor/
 *.log

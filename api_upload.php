@@ -448,28 +448,112 @@ async function uploadData() {
         resultsDiv.classList.remove('hidden');
 
         if (result.success) {
-            const nf = result.data?.not_found_list?.length > 0
-                ? `<div class="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
-                     <p class="text-yellow-800 dark:text-yellow-300 font-semibold mb-2">
-                       ⚠️ ${result.data.not_found_count} Staff Not Found in Database
-                     </p>
-                     <div class="max-h-40 overflow-y-auto">
-                       <table class="w-full text-sm text-yellow-900 dark:text-yellow-200">
-                         <thead class="bg-yellow-100 dark:bg-yellow-900/40 sticky top-0"><tr>
-                           <th class="px-2 py-1 text-left">Staff ID</th>
-                           <th class="px-2 py-1 text-left">Name</th>
-                           <th class="px-2 py-1 text-right">Amount</th>
-                         </tr></thead>
-                         <tbody>${result.data.not_found_list.map(s => `
-                           <tr class="border-b border-yellow-200 dark:border-yellow-800">
-                             <td class="px-2 py-1">${s.staff_id}</td>
-                             <td class="px-2 py-1">${s.name}</td>
-                             <td class="px-2 py-1 text-right">₦${parseFloat(s.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</td>
-                           </tr>`).join('')}
-                         </tbody>
-                       </table>
-                     </div>
-                   </div>` : '';
+            const notFoundList = result.data?.not_found_list || [];
+            const notFoundCount = result.data?.not_found_count || 0;
+
+            const nfTableRows = notFoundList.map(s => `
+                <tr style="border-bottom:1px solid #fde68a">
+                    <td style="padding:6px 10px;font-weight:600">${s.staff_id}</td>
+                    <td style="padding:6px 10px">${s.name || 'Unknown'}</td>
+                    <td style="padding:6px 10px;text-align:right">₦${parseFloat(s.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</td>
+                </tr>`).join('');
+
+            const nfHtml = notFoundCount > 0 ? `
+                <div style="margin-top:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;overflow:hidden">
+                    <div style="background:#fef3c7;padding:10px 14px;font-weight:700;color:#92400e;text-align:left">
+                        ⚠️ ${notFoundCount} Staff Not Found in Local Database
+                    </div>
+                    <div style="max-height:280px;overflow-y:auto">
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;color:#78350f">
+                            <thead style="background:#fde68a;position:sticky;top:0">
+                                <tr>
+                                    <th style="padding:7px 10px;text-align:left">Staff ID</th>
+                                    <th style="padding:7px 10px;text-align:left">Name</th>
+                                    <th style="padding:7px 10px;text-align:right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>${nfTableRows}</tbody>
+                        </table>
+                    </div>
+                </div>` : '';
+
+            const nfInline = notFoundCount > 0 ? `
+                <div class="mt-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl overflow-hidden">
+                    <div class="bg-yellow-100 dark:bg-yellow-900/40 px-4 py-3 flex items-center justify-between">
+                        <span class="font-semibold text-yellow-800 dark:text-yellow-300">⚠️ ${notFoundCount} Staff Not Found in Local Database</span>
+                        <button onclick="exportNotFound()" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded-lg flex items-center gap-1">
+                            <span class="material-icons-round text-xs">file_download</span> Export
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-yellow-50 dark:bg-yellow-900/20">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-yellow-800 dark:text-yellow-300 uppercase">Staff ID</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-yellow-800 dark:text-yellow-300 uppercase">Name</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-yellow-800 dark:text-yellow-300 uppercase">Amount (₦)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-yellow-200 dark:divide-yellow-800">
+                                ${notFoundList.map(s => `
+                                <tr class="hover:bg-yellow-50 dark:hover:bg-yellow-900/10">
+                                    <td class="px-4 py-2 font-semibold text-yellow-900 dark:text-yellow-200">${s.staff_id}</td>
+                                    <td class="px-4 py-2 text-yellow-800 dark:text-yellow-300">${s.name || 'Unknown'}</td>
+                                    <td class="px-4 py-2 text-right font-medium text-yellow-900 dark:text-yellow-200">₦${parseFloat(s.amount).toLocaleString('en-NG',{minimumFractionDigits:2})}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>` : '';
+
+            // Store not-found list for export
+            window._notFoundData = notFoundList;
+
+            // Members whose salary deduction could not cover their contribution
+            // plus their standing bank loan. Imported anyway, but flagged.
+            const shortfallList  = result.data?.shortfall_list || [];
+            const shortfallCount = result.data?.shortfall_count || 0;
+            window._shortfallData = shortfallList;
+
+            const sfInline = shortfallCount > 0 ? `
+                <div class="mt-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl overflow-hidden">
+                    <div class="bg-orange-100 dark:bg-orange-900/40 px-4 py-3 flex items-center justify-between">
+                        <span class="font-semibold text-orange-800 dark:text-orange-300">⚠️ ${shortfallCount} Deduction${shortfallCount === 1 ? '' : 's'} Smaller Than Expected</span>
+                        <button onclick="exportShortfalls()" class="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded-lg flex items-center gap-1">
+                            <span class="material-icons-round text-xs">file_download</span> Export
+                        </button>
+                    </div>
+                    <p class="px-4 pt-3 text-xs text-orange-700 dark:text-orange-400">
+                        Payroll sent less than these members' contribution plus bank loan. Only what actually arrived was recorded — the contribution was taken first, then the bank loan absorbed the shortage.
+                    </p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-orange-50 dark:bg-orange-900/20">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Staff ID</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Name</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Gross</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Expected</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Contribution</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Bank Loan</th>
+                                    <th class="px-4 py-2 text-right text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase">Short By</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-orange-200 dark:divide-orange-800">
+                                ${shortfallList.map(s => `
+                                <tr class="hover:bg-orange-50 dark:hover:bg-orange-900/10">
+                                    <td class="px-4 py-2 font-semibold text-orange-900 dark:text-orange-200">${s.staff_id}</td>
+                                    <td class="px-4 py-2 text-orange-800 dark:text-orange-300">${s.name || 'Unknown'}</td>
+                                    <td class="px-4 py-2 text-right text-orange-900 dark:text-orange-200">${fmtNaira(s.gross)}</td>
+                                    <td class="px-4 py-2 text-right text-orange-900 dark:text-orange-200">${fmtNaira(s.expected_total)}</td>
+                                    <td class="px-4 py-2 text-right text-orange-900 dark:text-orange-200">${fmtNaira(s.applied_contrib)} <span class="opacity-50">/ ${fmtNaira(s.expected_contrib)}</span></td>
+                                    <td class="px-4 py-2 text-right text-orange-900 dark:text-orange-200">${fmtNaira(s.applied_bank)} <span class="opacity-50">/ ${fmtNaira(s.expected_bank)}</span></td>
+                                    <td class="px-4 py-2 text-right font-bold text-orange-900 dark:text-orange-200">${fmtNaira(s.shortfall)}</td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>` : '';
 
             resultsDiv.innerHTML = `
                 <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
@@ -480,9 +564,29 @@ async function uploadData() {
                             <p class="text-sm text-green-700 dark:text-green-400 mt-1">${result.message}</p>
                             ${result.details ? `<p class="text-xs text-green-600 dark:text-green-500 mt-1">${result.details}</p>` : ''}
                         </div>
-                    </div>${nf}
-                </div>`;
-            Swal.fire('Success!', result.message + (result.data?.not_found_count > 0 ? `\n\n⚠️ ${result.data.not_found_count} staff not found` : ''), 'success');
+                    </div>
+                </div>${nfInline}${sfInline}`;
+
+            resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            const sfNote = shortfallCount > 0
+                ? `<p style="margin-top:12px;padding:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:13px;color:#9a3412">
+                     ⚠️ ${shortfallCount} member${shortfallCount === 1 ? "'s deduction was" : "s' deductions were"} too small to cover the full bank loan. See the details below the table.
+                   </p>`
+                : '';
+
+            const needsAttention = notFoundCount > 0 || shortfallCount > 0;
+
+            await Swal.fire({
+                title: 'Upload Successful!',
+                html: `<p style="color:#166534;margin-bottom:8px">${result.message}</p>
+                       ${result.details ? `<p style="font-size:13px;color:#15803d">${result.details}</p>` : ''}
+                       ${sfNote}
+                       ${nfHtml}`,
+                icon: needsAttention ? 'warning' : 'success',
+                confirmButtonText: 'OK',
+                width: needsAttention ? 600 : 400,
+            });
         } else {
             resultsDiv.innerHTML = `
                 <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center gap-3">
@@ -512,6 +616,43 @@ function clearData() {
     document.getElementById('searchInput').disabled   = true;
     document.getElementById('searchInput').value      = '';
     document.getElementById('exportBtn').disabled     = true;
+}
+
+function fmtNaira(value) {
+    return '₦' + parseFloat(value || 0).toLocaleString('en-NG', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function exportShortfalls() {
+    const list = window._shortfallData || [];
+    if (!list.length) return;
+    const rows = list.map((s, i) => ({
+        'S/N': i + 1,
+        'Staff ID': s.staff_id,
+        'Name': s.name || 'Unknown',
+        'Gross (N)': parseFloat(s.gross),
+        'Expected Total (N)': parseFloat(s.expected_total),
+        'Contribution Expected (N)': parseFloat(s.expected_contrib),
+        'Contribution Applied (N)': parseFloat(s.applied_contrib),
+        'Bank Loan Expected (N)': parseFloat(s.expected_bank),
+        'Bank Loan Applied (N)': parseFloat(s.applied_bank),
+        'Short By (N)': parseFloat(s.shortfall),
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:5},{wch:15},{wch:40},{wch:16},{wch:18},{wch:24},{wch:24},{wch:22},{wch:22},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Deduction Shortfalls');
+    XLSX.writeFile(wb, `Deduction_Shortfalls_${Date.now()}.xlsx`);
+}
+
+function exportNotFound() {
+    const list = window._notFoundData || [];
+    if (!list.length) return;
+    const rows = list.map((s, i) => ({'S/N': i+1, 'Staff ID': s.staff_id, 'Name': s.name || 'Unknown', 'Amount (N)': parseFloat(s.amount)}));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{wch:5},{wch:15},{wch:40},{wch:15}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Not Found Staff');
+    XLSX.writeFile(wb, `NotFound_Staff_${Date.now()}.xlsx`);
 }
 
 function exportToExcel() {

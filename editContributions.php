@@ -123,11 +123,21 @@ function format_money($amount) {
                     <span id="memberIdBadge" class="px-3 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs font-bold uppercase">ID: ...</span>
                 </div>
 
+                <!-- Already-processed warning: edits here do not rewrite the ledger -->
+                <div id="processedWarning" class="hidden mx-8 mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3">
+                    <span class="material-icons-round text-amber-500 mt-0.5">warning</span>
+                    <div class="text-sm text-amber-800 dark:text-amber-300">
+                        <p class="font-bold">This period has already been processed</p>
+                        <p class="mt-1">Saving changes here updates the deduction record, but it does not rewrite the transactions already posted to the ledger for this period. Reverse the posted transaction first if the loan balance needs correcting.</p>
+                    </div>
+                </div>
+
                 <form id="contributionForm" class="p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
                     <input type="hidden" name="member_id"  id="hiddenMemberId">
                     <input type="hidden" name="period_id"  id="hiddenPeriodId">
                     <input type="hidden" name="action"     value="update_record">
-                    
+                    <input type="hidden" name="gross_deduction" id="hiddenGross" value="0">
+
                     <div class="space-y-6">
                         <!-- Contribution Input -->
                         <div>
@@ -137,14 +147,14 @@ function format_money($amount) {
                                 <input name="contribution_amount" id="contribInput" 
                                        class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-none rounded-xl focus:ring-2 focus:ring-primary text-lg font-bold transition-all" 
                                        type="text" 
-                                       oninput="formatInput(this); calculateTotal();"
+                                       oninput="formatInput(this); rebalanceAllocation();"
                                 />
                             </div>
                         </div>
 
                         <!-- Loan Repayment Input -->
                         <div>
-                            <label class="block text-sm font-semibold mb-2">Loan Repayment (₦)</label>
+                            <label class="block text-sm font-semibold mb-2">Union Loan Repayment (₦)</label>
                             <div class="relative">
                                 <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
                                 <input name="loan_repayment" id="loanInput"
@@ -153,14 +163,60 @@ function format_money($amount) {
                                        oninput="formatInput(this); calculateTotal();"
                                 />
                             </div>
+                            <p class="text-xs text-slate-500 mt-1.5">This is the only figure the loan engine repays with.</p>
                         </div>
 
-                        <!-- Total Display (Calculated Visual Only) -->
-                        <div class="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                             <div class="flex justify-between items-center">
-                                 <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Total Deduction</span>
-                                 <span class="text-xl font-bold text-primary" id="visualTotal">₦0.00</span>
-                             </div>
+                        <!-- Bank Loan Input (untracked third-party debt) -->
+                        <div class="p-4 bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/50 rounded-xl">
+                            <label class="block text-sm font-semibold mb-2 flex items-center gap-2 text-purple-900 dark:text-purple-200">
+                                <span class="material-icons-round text-lg">account_balance</span>
+                                Bank Loan Deduction (₦)
+                            </label>
+                            <div class="relative">
+                                <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-purple-400">₦</span>
+                                <input name="bank_loan" id="bankLoanInput"
+                                       class="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800 rounded-xl focus:ring-2 focus:ring-purple-500 text-lg font-bold transition-all"
+                                       type="text"
+                                       oninput="formatInput(this); rebalanceAllocation();"
+                                />
+                            </div>
+                            <p class="text-xs text-purple-700 dark:text-purple-400 mt-1.5">
+                                Money deducted from salary for a bank loan the union does not track. Entering an amount here reduces the union loan repayment by the same amount.
+                            </p>
+
+                            <label class="flex items-start gap-2 mt-3 cursor-pointer">
+                                <input type="checkbox" name="bank_loan_recurring" id="bankLoanRecurring" value="1" checked
+                                       onchange="updateRecurringHint();"
+                                       class="mt-0.5 w-4 h-4 text-purple-600 border-purple-300 rounded focus:ring-purple-500 cursor-pointer">
+                                <span class="text-xs text-purple-800 dark:text-purple-300">
+                                    <span class="font-semibold">Recurring deduction</span> — apply this amount automatically on every future API import, until it is set to zero or stopped.
+                                </span>
+                            </label>
+
+                            <p id="recurringHint" class="hidden mt-2 px-3 py-2 rounded-lg text-xs font-medium"></p>
+
+                            <div id="standingBankLoanRow" class="hidden mt-3 pt-3 border-t border-purple-200 dark:border-purple-800 flex items-center justify-between gap-3">
+                                <p class="text-xs text-purple-800 dark:text-purple-300">
+                                    Currently recurring: <span id="standingBankLoanAmount" class="font-bold">₦0.00</span>
+                                </p>
+                                <button type="button" onclick="stopRecurringBankLoan()"
+                                        class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-semibold hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors flex items-center gap-1">
+                                    <span class="material-icons-round text-sm">block</span> Stop recurring
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Balance check against the payroll figure -->
+                        <div id="balancePanel" class="bg-primary/5 p-4 rounded-xl border border-primary/10 space-y-2">
+                            <div class="flex justify-between items-center pb-2 border-b border-primary/10">
+                                <span class="text-sm font-medium text-slate-600 dark:text-slate-400">Total from Salary</span>
+                                <span class="text-xl font-bold text-primary" id="visualTotal">₦0.00</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-500">Allocated</span>
+                                <span class="font-semibold" id="visualAllocated">₦0.00</span>
+                            </div>
+                            <div id="balanceStatus" class="flex items-center gap-2 text-sm font-semibold pt-1"></div>
                         </div>
 
                         <div class="pt-4 flex gap-3">
@@ -198,18 +254,24 @@ function format_money($amount) {
                                     <span id="breakdownContrib" class="font-semibold">₦0.00</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Loan Repayment</span>
+                                    <span class="text-slate-500">Union Loan Repayment</span>
                                     <span id="breakdownLoan" class="font-semibold">₦0.00</span>
                                 </div>
-                                <div class="flex justify-between text-orange-600 dark:text-orange-400" id="breakdownRefundRow">
+                                <div class="flex justify-between text-purple-600 dark:text-purple-400" id="breakdownBankRow">
                                     <span class="flex items-center gap-1">
-                                        <span class="material-icons-round text-sm">undo</span> Refund
+                                        <span class="material-icons-round text-sm">account_balance</span> Bank Loan
                                     </span>
-                                    <span id="breakdownRefund" class="font-semibold">₦0.00</span>
+                                    <span id="breakdownBank" class="font-semibold">₦0.00</span>
                                 </div>
                                 <div class="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold">
                                     <span>Total from Salary</span>
                                     <span id="breakdownTotal" class="text-primary">₦0.00</span>
+                                </div>
+                                <div class="flex justify-between text-orange-600 dark:text-orange-400 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700" id="breakdownRefundRow">
+                                    <span class="flex items-center gap-1">
+                                        <span class="material-icons-round text-sm">undo</span> Refund issued
+                                    </span>
+                                    <span id="breakdownRefund" class="font-semibold">₦0.00</span>
                                 </div>
                             </div>
                         </div>
@@ -220,8 +282,9 @@ function format_money($amount) {
                             <div id="refundList" class="space-y-2"></div>
                         </div>
 
-                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg">
-                            <span class="font-bold">Note:</span> Increasing loan repayment reduces the loan balance faster during the next payroll cycle.
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg space-y-2">
+                            <p><span class="font-bold">Note:</span> Increasing the union loan repayment reduces the loan balance faster during the next payroll cycle.</p>
+                            <p>Bank loan money is set aside and never touches the loan balance — but it is recorded here so the period reconciles against payroll.</p>
                         </div>
                     </div>
                 </form>
@@ -404,7 +467,14 @@ function format_money($amount) {
 
                     $('#contribInput').val(formatMoney(data.contribution.contribution));
                     $('#loanInput').val(formatMoney(data.contribution.loan));
+                    $('#bankLoanInput').val(formatMoney(data.contribution.bank_loan));
                     $('#loanBalanceDisplay').text('₦' + formatMoney(data.loan_balance));
+
+                    // The payroll figure this split has to reconcile against.
+                    $('#hiddenGross').val(parseFloat(data.contribution.gross_deduction) || 0);
+
+                    renderStandingBankLoan(data.standing_bank_loan || 0);
+                    $('#processedWarning').toggleClass('hidden', !data.is_processed);
 
                     renderRefunds(data.refunds || [], data.refund_total || 0);
                     calculateTotal();
@@ -435,12 +505,14 @@ function format_money($amount) {
             success: function(response) {
                 if (response.status === 'success') {
                     Swal.fire({
-                        icon: 'success',
+                        icon: response.gross_moved ? 'warning' : 'success',
                         title: 'Saved',
-                        text: 'Record updated successfully!',
-                        timer: 1500,
-                        showConfirmButton: false
+                        text: response.message,
+                        timer: response.gross_moved ? undefined : 1800,
+                        showConfirmButton: !!response.gross_moved
                     });
+                    // Reload so the panel reflects whatever the server settled on.
+                    loadMember($('#hiddenMemberId').val());
                 } else {
                     Swal.fire('Error', 'Update failed: ' + response.message, 'error');
                 }
@@ -455,6 +527,7 @@ function format_money($amount) {
 
     function resetView() {
         $('#editFormContainer').hide();
+        $('#processedWarning').addClass('hidden');
         $('#emptyState').fadeIn(200);
         $('.member-item').removeClass('bg-primary/5 border-primary/20').addClass('border-transparent');
     }
@@ -501,13 +574,104 @@ function format_money($amount) {
         updateBreakdown();
     }
 
+    // Sub-kobo drift is rounding noise, not an imbalance.
+    const BALANCE_TOLERANCE = 0.005;
+
+    function readMoney(selector) {
+        return parseFloat(String($(selector).val() || '').replace(/,/g, '')) || 0;
+    }
+
     function updateBreakdown() {
-        const contrib = parseFloat($('#contribInput').val().replace(/,/g, '') || 0);
-        const loan    = parseFloat($('#loanInput').val().replace(/,/g, '')    || 0);
-        const total   = contrib + loan + currentRefundTotal;
+        const contrib = readMoney('#contribInput');
+        const loan    = readMoney('#loanInput');
+        const bank    = readMoney('#bankLoanInput');
+
+        // Refund is an outcome of processing, not part of the payroll split, so
+        // it sits outside the total that has to reconcile against payroll.
         $('#breakdownContrib').text('₦' + formatMoney(contrib));
         $('#breakdownLoan').text('₦'    + formatMoney(loan));
-        $('#breakdownTotal').text('₦'   + formatMoney(total));
+        $('#breakdownBank').text('₦'    + formatMoney(bank));
+        $('#breakdownTotal').text('₦'   + formatMoney(contrib + loan + bank));
+        $('#breakdownBankRow').toggleClass('hidden', bank <= 0);
+    }
+
+    /**
+     * The payroll figure is fixed, so money moved into the bank loan has to come
+     * out of the union loan repayment. Only applies once a gross is known —
+     * on a period with no imported record the three fields are free entry.
+     */
+    function rebalanceAllocation() {
+        const gross = parseFloat($('#hiddenGross').val()) || 0;
+
+        if (gross > 0) {
+            const remainder = gross - readMoney('#contribInput') - readMoney('#bankLoanInput');
+            $('#loanInput').val(formatMoney(Math.max(0, remainder)));
+        }
+
+        calculateTotal();
+    }
+
+    // The amount future imports will carve out for the member currently on screen.
+    let currentStandingBankLoan = 0;
+
+    function renderStandingBankLoan(amount) {
+        currentStandingBankLoan = parseFloat(amount) || 0;
+        $('#standingBankLoanAmount').text('₦' + formatMoney(currentStandingBankLoan));
+        $('#standingBankLoanRow').toggleClass('hidden', currentStandingBankLoan <= 0);
+        $('#bankLoanRecurring').prop('checked', true);
+        updateRecurringHint();
+    }
+
+    /**
+     * Saving a zero with "recurring" ticked cancels the standing deduction. That
+     * is a legitimate way to end it, but it must never happen silently when the
+     * admin only meant to zero out a single month.
+     */
+    function updateRecurringHint() {
+        const hint      = $('#recurringHint');
+        const entered   = readMoney('#bankLoanInput');
+        const recurring = $('#bankLoanRecurring').is(':checked');
+
+        if (recurring && entered <= 0 && currentStandingBankLoan > 0) {
+            hint.attr('class', 'mt-2 px-3 py-2 rounded-lg text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300')
+                .text('Saving ₦0.00 with this ticked will stop the recurring ₦' + formatMoney(currentStandingBankLoan) +
+                      ' deduction. Untick it to zero this period only.')
+                .removeClass('hidden');
+            return;
+        }
+
+        if (recurring && entered > 0 && Math.abs(entered - currentStandingBankLoan) >= BALANCE_TOLERANCE) {
+            hint.attr('class', 'mt-2 px-3 py-2 rounded-lg text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300')
+                .text('Future imports will carve out ₦' + formatMoney(entered) + ' for this member.')
+                .removeClass('hidden');
+            return;
+        }
+
+        hint.addClass('hidden');
+    }
+
+    async function stopRecurringBankLoan() {
+        const memberId = $('#hiddenMemberId').val();
+        if (!memberId) return;
+
+        const confirm = await Swal.fire({
+            title: 'Stop recurring bank loan?',
+            text: 'Future API imports will no longer set money aside for this member. Records already saved for past periods are kept.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, stop it',
+            confirmButtonColor: '#7c3aed'
+        });
+        if (!confirm.isConfirmed) return;
+
+        $.post('contribution_api.php', { action: 'clear_standing_bank_loan', member_id: memberId }, function(res) {
+            if (res.status === 'success') {
+                renderStandingBankLoan(0);
+                Swal.fire({ icon: 'success', title: 'Stopped', text: res.message, timer: 2200, showConfirmButton: false });
+            } else {
+                Swal.fire('Error', res.message, 'error');
+            }
+        }, 'json');
     }
 
     async function deleteRefund(refundId) {
@@ -543,17 +707,40 @@ function format_money($amount) {
     }
 
     function calculateTotal() {
-        const contribEl = document.getElementById('contribInput');
-        const loanEl    = document.getElementById('loanInput');
-        if (!contribEl || !loanEl) return;
+        if (!document.getElementById('contribInput')) return;
 
-        let contrib = parseFloat(contribEl.value.replace(/,/g, '') || 0);
-        let loan    = parseFloat(loanEl.value.replace(/,/g, '')    || 0);
-        let total   = contrib + loan;
+        const allocated = readMoney('#contribInput') + readMoney('#loanInput') + readMoney('#bankLoanInput');
+        const gross     = parseFloat($('#hiddenGross').val()) || 0;
 
-        const totalEl = document.getElementById('visualTotal');
-        if (totalEl) totalEl.innerText = '₦' + total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        // With no imported figure to reconcile against, the parts define the total.
+        const total = gross > 0 ? gross : allocated;
+
+        $('#visualTotal').text('₦' + formatMoney(total));
+        $('#visualAllocated').text('₦' + formatMoney(allocated));
+        renderBalanceStatus(total - allocated, gross);
         updateBreakdown();
+        updateRecurringHint();
+    }
+
+    function renderBalanceStatus(difference, gross) {
+        const status = $('#balanceStatus');
+
+        if (gross <= 0) {
+            status.html('<span class="material-icons-round text-sm text-slate-400">edit</span>' +
+                        '<span class="text-slate-500">No payroll figure imported — the amounts you enter set the total.</span>');
+            return;
+        }
+
+        if (Math.abs(difference) < BALANCE_TOLERANCE) {
+            status.html('<span class="material-icons-round text-sm text-emerald-500">check_circle</span>' +
+                        '<span class="text-emerald-600 dark:text-emerald-400">Balanced against payroll</span>');
+            return;
+        }
+
+        const label = difference > 0 ? 'Unallocated' : 'Over-allocated by';
+        status.html('<span class="material-icons-round text-sm text-red-500">error</span>' +
+                    '<span class="text-red-600 dark:text-red-400">' + label + ' ₦' +
+                    formatMoney(Math.abs(difference)) + ' — saving will reset the total to match.</span>');
     }
 </script>
 

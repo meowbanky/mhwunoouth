@@ -77,6 +77,10 @@
             <span class="material-icons-round">volunteer_activism</span>
             <span>Contributions</span>
         </a>
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bank_loan_report.php', $currentPage); ?>" href="bank_loan_report.php">
+            <span class="material-icons-round">account_balance</span>
+            <span>Bank Loans</span>
+        </a>
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('mastertransaction.php', $currentPage); ?>" href="mastertransaction.php">
             <span class="material-icons-round">assessment</span>
             <span>Reports</span>
@@ -85,11 +89,11 @@
             <span class="material-icons-round">analytics</span>
             <span>Status</span>
         </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bulksms.php', basename($currentPage)); ?>" href="bulksms.php">
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('bulksms.php', $currentPage); ?>" href="bulksms.php">
             <span class="material-icons-round">sms</span>
             <span>SMS Center</span>
         </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('dnd_status_checker.php', basename($currentPage)); ?>" href="dnd_status_checker.php">
+        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('dnd_status_checker.php', $currentPage); ?>" href="dnd_status_checker.php">
             <span class="material-icons-round">do_not_disturb_on</span>
             <span>DND Checker</span>
         </a>
@@ -109,10 +113,6 @@
         <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('registeruser.php', $currentPage); ?>" href="registeruser.php">
             <span class="material-icons-round">manage_accounts</span>
             <span>User Management</span>
-        </a>
-        <a class="flex items-center space-x-3 px-4 py-3 rounded-xl <?php echo isActive('backup2.php', $currentPage); ?>" href="backup2.php">
-            <span class="material-icons-round">backup</span>
-            <span>Backup</span>
         </a>
         <a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all" href="index.php?logout=true">
             <span class="material-icons-round">logout</span>
