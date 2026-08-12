@@ -1,19 +1,26 @@
 <?php
 /**
- * OTP delivery.
+ * OTP delivery over SMTP.
  *
- * This codebase had no email capability, so delivery uses PHP's mail(), which
- * works on cPanel for same-domain senders. If deliverability disappoints,
- * replace sendMail() with an SMTP client — nothing else needs to change.
+ * Sends through the cPanel mailbox via PHPMailer (vendored in portal/lib, since
+ * this project has no Composer). Falls back to PHP's mail() only if SMTP is
+ * unconfigured, so a missing .env entry degrades rather than breaks.
  *
- * Configure the sender in .env:
- *     PORTAL_MAIL_FROM=noreply@emmaggi.com
- *     PORTAL_MAIL_FROM_NAME=MHWUN OOUTH
+ * Configure in .env:
+ *     PORTAL_MAIL_FROM       sender address (should match SMTP_USERNAME)
+ *     PORTAL_MAIL_FROM_NAME  display name
+ *     SMTP_HOST / SMTP_PORT / SMTP_SECURE / SMTP_USERNAME / SMTP_PASSWORD
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../lib/PHPMailer/Exception.php';
+require_once __DIR__ . '/../lib/PHPMailer/PHPMailer.php';
+require_once __DIR__ . '/../lib/PHPMailer/SMTP.php';
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
 
 /** Read a portal setting from .env, falling back to a default. */
 function portalConfig(string $key, string $default = ''): string
@@ -96,32 +103,83 @@ HTML;
 /**
  * Deliver an HTML message.
  *
- * Failures are logged, never surfaced verbatim — a mail error can leak the
- * server's configuration to whoever triggered it.
+ * Failures are logged with detail but reported to the caller as a plain false —
+ * an SMTP error string names the mail host and account, which must never reach
+ * whoever triggered the send.
+ *
+ * @param string|null $error Receives the underlying reason, for diagnostics
+ *                           that only ever go to an authenticated admin.
  */
-function sendMail(string $to, string $subject, string $htmlBody): bool
+function sendMail(string $to, string $subject, string $htmlBody, ?string &$error = null): bool
 {
     $fromAddress = portalConfig('PORTAL_MAIL_FROM', 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'emmaggi.com'));
     $fromName    = portalConfig('PORTAL_MAIL_FROM_NAME', 'MHWUN OOUTH');
+    $smtpHost    = portalConfig('SMTP_HOST');
 
     if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        error_log("portal mailer: refusing to send to invalid address");
+        $error = 'Invalid recipient address';
+        error_log('portal mailer: refusing to send to invalid address');
         return false;
     }
 
-    $headers = implode("\r\n", [
-        'MIME-Version: 1.0',
-        'Content-Type: text/html; charset=UTF-8',
-        'From: ' . sprintf('%s <%s>', $fromName, $fromAddress),
-        'Reply-To: ' . $fromAddress,
-        'X-Mailer: MHWUN-Portal',
-    ]);
+    // No SMTP configured: fall back so a missing setting degrades gracefully.
+    if ($smtpHost === '') {
+        $headers = implode("\r\n", [
+            'MIME-Version: 1.0',
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . sprintf('%s <%s>', $fromName, $fromAddress),
+            'Reply-To: ' . $fromAddress,
+            'X-Mailer: MHWUN-Portal',
+        ]);
 
-    $sent = @mail($to, $subject, $htmlBody, $headers, '-f' . $fromAddress);
+        $sent = @mail($to, $subject, $htmlBody, $headers, '-f' . $fromAddress);
+        if (!$sent) {
+            $error = 'mail() returned false and no SMTP host is configured';
+            error_log('portal mailer: ' . $error);
+        }
 
-    if (!$sent) {
-        error_log('portal mailer: mail() returned false for subject "' . $subject . '"');
+        return $sent;
     }
 
-    return $sent;
+    $mail = new PHPMailer(true);
+
+    try {
+        $mail->isSMTP();
+        $mail->Host       = $smtpHost;
+        $mail->SMTPAuth   = true;
+        $mail->Username   = portalConfig('SMTP_USERNAME', $fromAddress);
+        $mail->Password   = portalConfig('SMTP_PASSWORD');
+        $mail->Port       = (int)portalConfig('SMTP_PORT', '465');
+        $mail->CharSet    = 'UTF-8';
+        $mail->Timeout    = 20;
+
+        // 465 is implicit TLS (SMTPS); 587 is STARTTLS.
+        $mail->SMTPSecure = portalConfig('SMTP_SECURE', 'ssl') === 'tls'
+            ? PHPMailer::ENCRYPTION_STARTTLS
+            : PHPMailer::ENCRYPTION_SMTPS;
+
+        $mail->setFrom($fromAddress, $fromName);
+        $mail->addAddress($to);
+        $mail->addReplyTo($fromAddress, $fromName);
+
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = trim(strip_tags(preg_replace('/<(br|\/p|\/div)[^>]*>/i', "\n", $htmlBody)));
+
+        $mail->send();
+
+        return true;
+
+    } catch (PHPMailerException $e) {
+        $error = $mail->ErrorInfo !== '' ? $mail->ErrorInfo : $e->getMessage();
+        error_log('portal mailer (SMTP): ' . $error);
+
+        return false;
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
+        error_log('portal mailer (SMTP, unexpected): ' . $error);
+
+        return false;
+    }
 }
